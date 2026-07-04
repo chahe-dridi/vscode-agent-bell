@@ -8,16 +8,16 @@ let outputChannel: vscode.OutputChannel;
 let statusBarItem: vscode.StatusBarItem;
 let watching = false;
 let flashTimer: ReturnType<typeof setTimeout> | undefined;
+let lastMatchLabel = '';
 
 let cachedPatterns: RegExp[] | null = null;
 const lastTriggerAt = new Map<vscode.Terminal, number>();
 
-// Stable sound path that doesn't change across extension updates.
 const STABLE_SOUND_PATH = path.join(os.homedir(), '.claude', 'agent-bell-notify.wav');
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 const HOOK_MARKER = 'agent-bell-notify';
 
-// ─── Sound ───────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function stripAnsi(input: string): string {
   return input.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
@@ -27,6 +27,27 @@ function getConfig() {
   return vscode.workspace.getConfiguration('agentConfirmSound');
 }
 
+// ─── Sound selection ─────────────────────────────────────────────────────────
+
+function pickSoundFile(context: vscode.ExtensionContext): string {
+  const bundled = path.join(context.extensionPath, 'media', 'notify.wav');
+  const sounds = getConfig().get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
+
+  if (sounds.length === 0) {
+    return bundled;
+  }
+
+  const mode = getConfig().get<string>('soundMode', 'fixed');
+  if (mode === 'random') {
+    const pool = [bundled, ...sounds];
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  return sounds[0];
+}
+
+// ─── Sound playback ──────────────────────────────────────────────────────────
+
 function buildHookCommand(soundFile: string): string {
   const platform = os.platform();
   const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
@@ -34,7 +55,6 @@ function buildHookCommand(soundFile: string): string {
   if (platform === 'darwin') {
     return `afplay -v ${volume} "${soundFile}"`;
   } else if (platform === 'win32') {
-    // Windows SoundPlayer has no volume API — adjust system volume instead.
     const ps = soundFile.replace(/'/g, "''");
     return `powershell -NoProfile -NonInteractive -Command "(New-Object Media.SoundPlayer '${ps}').PlaySync();"`;
   } else {
@@ -71,17 +91,13 @@ function playSound(soundFile: string) {
   const child = cp.spawn(cmd, args, spawnOpts);
   child.on('error', (err) => {
     outputChannel.appendLine(`[error] sound playback failed (${cmd}): ${err.message}`);
-    outputChannel.appendLine(`[hint] set agentConfirmSound.soundPath to a .wav your system can play.`);
+    outputChannel.appendLine(`[hint] check agentConfirmSound.sounds or set agentConfirmSound.soundPath.`);
   });
   child.unref();
 }
 
 function triggerSound(context: vscode.ExtensionContext) {
-  const customPath = getConfig().get<string>('soundPath', '').trim();
-  const soundFile = customPath.length > 0
-    ? customPath
-    : path.join(context.extensionPath, 'media', 'notify.wav');
-  playSound(soundFile);
+  playSound(pickSoundFile(context));
 }
 
 // ─── Claude Code hook integration ────────────────────────────────────────────
@@ -92,7 +108,7 @@ function readClaudeSettings(): Record<string, unknown> {
       return JSON.parse(fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf8')) as Record<string, unknown>;
     }
   } catch {
-    // corrupt or missing — start fresh
+    // corrupt or missing
   }
   return {};
 }
@@ -101,9 +117,7 @@ function writeClaudeSettings(settings: Record<string, unknown>) {
   fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 }
 
-// Hook event types we install into.
 const HOOK_EVENTS = ['Stop', 'Notification'] as const;
-
 type HookGroup = { matcher: string; hooks: Array<{ type: string; command: string }> };
 type HookGroupRead = { hooks?: Array<{ command?: string }> };
 
@@ -121,17 +135,12 @@ function isHookInstalled(): boolean {
 
 async function installClaudeHook(context: vscode.ExtensionContext): Promise<void> {
   const bundled = path.join(context.extensionPath, 'media', 'notify.wav');
-  try {
-    const claudeDir = path.dirname(CLAUDE_SETTINGS_PATH);
-    if (!fs.existsSync(claudeDir)) {
-      fs.mkdirSync(claudeDir, { recursive: true });
-    }
-    fs.copyFileSync(bundled, STABLE_SOUND_PATH);
-    outputChannel.appendLine(`[hook] sound copied to ${STABLE_SOUND_PATH}`);
-  } catch (e) {
-    outputChannel.appendLine(`[hook] failed to copy sound: ${e}`);
-    throw e;
+  const claudeDir = path.dirname(CLAUDE_SETTINGS_PATH);
+  if (!fs.existsSync(claudeDir)) {
+    fs.mkdirSync(claudeDir, { recursive: true });
   }
+  fs.copyFileSync(bundled, STABLE_SOUND_PATH);
+  outputChannel.appendLine(`[hook] sound copied to ${STABLE_SOUND_PATH}`);
 
   const settings = readClaudeSettings();
   const hooks = (settings['hooks'] ?? {}) as Record<string, unknown>;
@@ -142,8 +151,7 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   for (const event of HOOK_EVENTS) {
     const existing = (hooks[event] ?? []) as HookGroup[];
-    const alreadyThere = existing.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)));
-    if (!alreadyThere) {
+    if (!existing.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)))) {
       existing.push(entry);
       hooks[event] = existing;
     }
@@ -160,7 +168,6 @@ async function removeClaudeHook(): Promise<void> {
   if (!hooks) {
     return;
   }
-
   for (const event of HOOK_EVENTS) {
     const groups = hooks[event] as HookGroupRead[] | undefined;
     if (groups) {
@@ -169,13 +176,11 @@ async function removeClaudeHook(): Promise<void> {
         .filter((g) => (g.hooks as unknown[]).length > 0);
     }
   }
-
   try {
     if (fs.existsSync(STABLE_SOUND_PATH)) {
       fs.unlinkSync(STABLE_SOUND_PATH);
     }
   } catch { /* ignore */ }
-
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
   outputChannel.appendLine('[hook] Claude Code hooks removed.');
@@ -209,80 +214,37 @@ function terminalPassesNameFilter(terminal: vscode.Terminal): boolean {
   return filters.some((f) => name.includes(f.toLowerCase()));
 }
 
-function flashStatusBar() {
-  if (flashTimer) {
-    clearTimeout(flashTimer);
-  }
-  statusBarItem.text = '$(bell-dot) Agent Bell';
-  statusBarItem.color = new vscode.ThemeColor('notificationsInfoIcon.foreground');
-  flashTimer = setTimeout(() => {
-    updateStatusBar();
-    flashTimer = undefined;
-  }, 1500);
-}
-
-function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Terminal, chunk: string) {
-  if (!watching) {
-    return;
-  }
-  if (!terminalPassesNameFilter(terminal)) {
-    return;
-  }
-  const patterns = getPatterns();
-  if (!patterns.length) {
-    return;
-  }
-
-  const clean = stripAnsi(chunk);
-
-  if (getConfig().get<boolean>('debugLog', false)) {
-    outputChannel.appendLine(`[debug] terminal="${terminal.name}" chunk=${JSON.stringify(clean.slice(0, 200))}`);
-  }
-
-  const matched = patterns.find((re) => re.test(clean));
-  if (!matched) {
-    return;
-  }
-
-  const debounceMs = getConfig().get<number>('debounceMs', 4000);
-  const now = Date.now();
-  if ((lastTriggerAt.get(terminal) ?? 0) + debounceMs > now) {
-    return;
-  }
-  lastTriggerAt.set(terminal, now);
-
-  outputChannel.appendLine(`[match] "${terminal.name}" matched ${matched} at ${new Date(now).toISOString()}`);
-
-  if (getConfig().get<boolean>('focusTerminal', false)) {
-    terminal.show(true);
-  }
-
-  flashStatusBar();
-  triggerSound(context);
-}
-
-async function watchExecution(
-  context: vscode.ExtensionContext,
-  terminal: vscode.Terminal,
-  execution: vscode.TerminalShellExecution
-) {
-  try {
-    for await (const chunk of execution.read()) {
-      maybeTrigger(context, terminal, chunk);
-    }
-  } catch (e) {
-    outputChannel.appendLine(`[error] stream read failed: ${e}`);
-  }
-}
-
 // ─── Status bar ──────────────────────────────────────────────────────────────
 
 function updateStatusBar() {
-  statusBarItem.text = watching ? '$(bell) Agent Bell' : '$(bell-slash) Agent Bell';
-  statusBarItem.tooltip = watching
-    ? 'Agent Bell is watching terminals. Click to pause.'
-    : 'Agent Bell is paused. Click to start watching.';
-  statusBarItem.color = watching ? undefined : new vscode.ThemeColor('statusBarItem.warningForeground');
+  if (flashTimer) {
+    return; // let flash finish
+  }
+  if (watching) {
+    statusBarItem.text = lastMatchLabel
+      ? `$(bell) Agent Bell: On  ·  last alert ${lastMatchLabel}`
+      : '$(bell) Agent Bell: On';
+    statusBarItem.color = undefined;
+    statusBarItem.tooltip = 'Agent Bell is watching terminals. Click to pause.';
+  } else {
+    statusBarItem.text = '$(bell-slash) Agent Bell: Off';
+    statusBarItem.color = new vscode.ThemeColor('statusBarItem.warningForeground');
+    statusBarItem.tooltip = 'Agent Bell is paused. Click to resume watching.';
+  }
+}
+
+function flashStatusBar(label: string) {
+  lastMatchLabel = label;
+  if (flashTimer) {
+    clearTimeout(flashTimer);
+  }
+  statusBarItem.text = `$(bell-dot) Agent Bell: Playing`;
+  statusBarItem.color = new vscode.ThemeColor('notificationsInfoIcon.foreground');
+  statusBarItem.tooltip = `Last alert: ${label}`;
+  flashTimer = setTimeout(() => {
+    flashTimer = undefined;
+    updateStatusBar();
+  }, 2000);
 }
 
 function setWatching(value: boolean) {
@@ -302,36 +264,33 @@ export function activate(context: vscode.ExtensionContext) {
 
   setWatching(getConfig().get<boolean>('enabled', true));
 
-  // Offer Claude Code hook setup on first install (non-blocking).
   if (!isHookInstalled()) {
     vscode.window.showInformationMessage(
       [
         'Agent Bell — Claude Code Integration',
         '',
-        'This will make two changes to your local machine:',
+        'This will make two changes on your local machine:',
         '',
-        `1. Copy the notification sound to:`,
+        '1. Copy the notification sound to:',
         `   ${STABLE_SOUND_PATH}`,
         '',
-        `2. Add Stop + Notification hooks to:`,
+        '2. Add Stop + Notification hooks to:',
         `   ${CLAUDE_SETTINGS_PATH}`,
         '',
-        'The Stop hook plays when Claude finishes its turn.',
-        'The Notification hook plays when Claude needs you to approve something.',
+        '• Stop hook   → plays when Claude finishes its turn',
+        '• Notification hook → plays when Claude needs you to approve something',
         '',
-        'Nothing is sent externally. You can undo this at any time via',
-        '"Agent Bell: Remove Claude Code Integration".',
+        'Nothing is sent externally. Fully reversible via:',
+        '"Agent Bell: Remove Claude Code Integration"',
       ].join('\n'),
       { modal: true },
       'Set it up',
       'Not now'
     ).then((choice) => {
       if (choice === 'Set it up') {
-        installClaudeHook(context).then(() => {
-          vscode.window.showInformationMessage('Agent Bell: Claude Code integration ready. You\'ll hear a sound when Claude finishes its turn or needs your input.');
-        }).catch((e) => {
-          vscode.window.showErrorMessage(`Agent Bell: failed to install hook — ${e}`);
-        });
+        installClaudeHook(context)
+          .then(() => vscode.window.showInformationMessage("Agent Bell: Claude Code integration ready. You'll hear a sound when Claude finishes or needs your input."))
+          .catch((e) => vscode.window.showErrorMessage(`Agent Bell: failed to install hook — ${e}`));
       }
     });
   }
@@ -347,6 +306,9 @@ export function activate(context: vscode.ExtensionContext) {
       if (e.affectsConfiguration('agentConfirmSound.enabled')) {
         setWatching(getConfig().get<boolean>('enabled', true));
       }
+      if (e.affectsConfiguration('agentConfirmSound.sounds') || e.affectsConfiguration('agentConfirmSound.soundMode')) {
+        updateStatusBar();
+      }
     }),
     vscode.window.onDidCloseTerminal((terminal) => {
       lastTriggerAt.delete(terminal);
@@ -356,18 +318,84 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('agentConfirmSound.toggle', () => {
       setWatching(!watching);
-      vscode.window.setStatusBarMessage(
-        watching ? 'Agent Bell: watching' : 'Agent Bell: paused',
-        2000
-      );
     }),
     vscode.commands.registerCommand('agentConfirmSound.testSound', () => {
-      outputChannel.appendLine('[info] test sound triggered.');
-      flashStatusBar();
-      triggerSound(context);
+      const file = pickSoundFile(context);
+      outputChannel.appendLine(`[info] test sound → ${path.basename(file)}`);
+      flashStatusBar('test');
+      playSound(file);
     }),
     vscode.commands.registerCommand('agentConfirmSound.showLog', () => {
       outputChannel.show();
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.addSound', async () => {
+      const uris = await vscode.window.showOpenDialog({
+        canSelectMany: true,
+        filters: { 'Sound files': ['wav', 'mp3', 'aiff', 'ogg', 'flac'] },
+        title: 'Add sound files to Agent Bell',
+      });
+      if (!uris || uris.length === 0) {
+        return;
+      }
+      const current = getConfig().get<string[]>('sounds', []);
+      const added = uris.map((u) => u.fsPath).filter((p) => !current.includes(p));
+      await getConfig().update('sounds', [...current, ...added], vscode.ConfigurationTarget.Global);
+      vscode.window.showInformationMessage(`Agent Bell: added ${added.length} sound file(s). Mode: ${getConfig().get('soundMode', 'fixed')}.`);
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.chooseSounds', async () => {
+      const sounds = getConfig().get<string[]>('sounds', []);
+      const bundledLabel = '$(file-media) Bundled (default)';
+      const mode = getConfig().get<string>('soundMode', 'fixed');
+
+      const items: vscode.QuickPickItem[] = [
+        {
+          label: bundledLabel,
+          description: 'notify.wav included with Agent Bell',
+          picked: sounds.length === 0,
+        },
+        ...sounds.map((s) => ({
+          label: `$(file-media) ${path.basename(s)}`,
+          description: s,
+          picked: true,
+        })),
+        { label: '', kind: vscode.QuickPickItemKind.Separator },
+        {
+          label: `$(add) Add sound file…`,
+          description: 'Pick a .wav / .mp3 / .aiff file',
+        },
+        { label: '', kind: vscode.QuickPickItemKind.Separator },
+        {
+          label: mode === 'random' ? '$(check) Random mode: On' : '$(circle-slash) Random mode: Off',
+          description: mode === 'random' ? 'Click to use fixed (first) sound' : 'Click to pick randomly from all sounds',
+        },
+      ];
+
+      const pick = await vscode.window.showQuickPick(items, {
+        title: 'Agent Bell — Manage Sounds',
+        placeHolder: 'Select an action',
+      });
+
+      if (!pick) {
+        return;
+      }
+
+      if (pick.label.includes('Add sound file')) {
+        await vscode.commands.executeCommand('agentConfirmSound.addSound');
+      } else if (pick.label.includes('Random mode')) {
+        const newMode = mode === 'random' ? 'fixed' : 'random';
+        await getConfig().update('soundMode', newMode, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage(`Agent Bell: sound mode set to ${newMode}.`);
+      } else if (pick.description && pick.description !== 'notify.wav included with Agent Bell') {
+        const remove = await vscode.window.showWarningMessage(
+          `Remove "${path.basename(pick.description)}" from the list?`,
+          'Remove', 'Cancel'
+        );
+        if (remove === 'Remove') {
+          const updated = sounds.filter((s) => s !== pick.description);
+          await getConfig().update('sounds', updated, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage('Agent Bell: sound removed.');
+        }
+      }
     }),
     vscode.commands.registerCommand('agentConfirmSound.setupClaudeHook', async () => {
       if (isHookInstalled()) {
@@ -417,6 +445,62 @@ export function activate(context: vscode.ExtensionContext) {
 
   outputChannel.appendLine(`[info] Agent Bell ${context.extension.packageJSON.version} activated. Watching: ${watching}`);
   outputChannel.appendLine(`[info] Claude Code hook: ${isHookInstalled() ? 'installed' : 'not installed'}`);
+  outputChannel.appendLine(`[info] Sound mode: ${getConfig().get('soundMode', 'fixed')} | Sounds: ${getConfig().get<string[]>('sounds', []).length} custom`);
+}
+
+async function watchExecution(
+  context: vscode.ExtensionContext,
+  terminal: vscode.Terminal,
+  execution: vscode.TerminalShellExecution
+) {
+  try {
+    for await (const chunk of execution.read()) {
+      maybeTrigger(context, terminal, chunk);
+    }
+  } catch (e) {
+    outputChannel.appendLine(`[error] stream read failed: ${e}`);
+  }
+}
+
+function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Terminal, chunk: string) {
+  if (!watching) {
+    return;
+  }
+  if (!terminalPassesNameFilter(terminal)) {
+    return;
+  }
+  const patterns = getPatterns();
+  if (!patterns.length) {
+    return;
+  }
+
+  const clean = stripAnsi(chunk);
+
+  if (getConfig().get<boolean>('debugLog', false)) {
+    outputChannel.appendLine(`[debug] terminal="${terminal.name}" chunk=${JSON.stringify(clean.slice(0, 200))}`);
+  }
+
+  const matched = patterns.find((re) => re.test(clean));
+  if (!matched) {
+    return;
+  }
+
+  const debounceMs = getConfig().get<number>('debounceMs', 4000);
+  const now = Date.now();
+  if ((lastTriggerAt.get(terminal) ?? 0) + debounceMs > now) {
+    return;
+  }
+  lastTriggerAt.set(terminal, now);
+
+  const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  outputChannel.appendLine(`[match] "${terminal.name}" matched ${matched} at ${new Date(now).toISOString()}`);
+
+  if (getConfig().get<boolean>('focusTerminal', false)) {
+    terminal.show(true);
+  }
+
+  flashStatusBar(timeLabel);
+  triggerSound(context);
 }
 
 export function deactivate() {

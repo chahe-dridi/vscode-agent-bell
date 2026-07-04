@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Agent Bell",
   "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -62,6 +62,14 @@
       {
         "command": "agentConfirmSound.removeClaudeHook",
         "title": "Agent Bell: Remove Claude Code Integration"
+      },
+      {
+        "command": "agentConfirmSound.addSound",
+        "title": "Agent Bell: Add Sound File"
+      },
+      {
+        "command": "agentConfirmSound.chooseSounds",
+        "title": "Agent Bell: Manage Sounds"
       }
     ],
     "configuration": {
@@ -131,6 +139,22 @@
           "type": "boolean",
           "default": false,
           "description": "Log every terminal chunk to the output channel (after ANSI stripping). Use this to see exactly what text reaches Agent Bell and tune your patterns. Disable when done — it is verbose."
+        },
+        "agentConfirmSound.sounds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "List of absolute paths to sound files (.wav/.mp3/.aiff). Leave empty to use the bundled sound. Add multiple files and set soundMode to 'random' to rotate through them. Use 'Agent Bell: Manage Sounds' from the Command Palette for an easier UI."
+        },
+        "agentConfirmSound.soundMode": {
+          "type": "string",
+          "enum": ["fixed", "random"],
+          "enumDescriptions": [
+            "Always use the first sound in the list.",
+            "Pick a sound at random from the list each time."
+          ],
+          "default": "fixed",
+          "description": "How to pick a sound when multiple are configured. 'fixed' uses the first, 'random' picks one at random."
         }
       }
     }
