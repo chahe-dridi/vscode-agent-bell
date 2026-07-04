@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3] — 2026-07-04
+
+- Add: status bar flashes on match (visual alert alongside sound)
+- Add: `agentConfirmSound.focusTerminal` setting — auto-focus the matching terminal
+- Add: **Agent Bell: Test Pattern** command — paste terminal output, see which pattern matched
+- Add: more Claude Code–specific default patterns (`approve/reject`, `tool call`, `run this command`, `execute?`, `waiting for input`)
+- Fix: flash timer properly cleared on deactivate
+
 ## [0.1.2] — 2026-07-04
 
 - Fix: Windows sound now works reliably — removed `detached: true` which caused audio device access issues

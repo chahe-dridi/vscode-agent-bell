@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Agent Bell",
   "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -50,6 +50,10 @@
       {
         "command": "agentConfirmSound.showLog",
         "title": "Agent Bell: Show Log"
+      },
+      {
+        "command": "agentConfirmSound.testPattern",
+        "title": "Agent Bell: Test Pattern"
       }
     ],
     "configuration": {
@@ -77,9 +81,13 @@
             "proceed\\?\\s*$",
             "\\(yes/no\\)",
             "type ['\"]?yes['\"]? to continue",
-            "allow (read|write|execute|bash|edit|create|delete)",
-            "bash\\s+command",
-            "do you want claude"
+            "allow (read|write|execute|bash|edit|create|delete|tool)",
+            "do you want claude",
+            "approve|reject.*action",
+            "waiting for (your )?input",
+            "tool (call|use|request)",
+            "run this command",
+            "execute.*\\?"
           ],
           "description": "Case-insensitive regex patterns matched against terminal output. A sound plays on the first match (then debounces). Tune these for the agents you use — check the output channel to see what's actually coming through."
         },
@@ -105,6 +113,11 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Volume level from 0 (silent) to 1 (full). Applied via afplay on macOS and paplay on Linux. Windows SoundPlayer does not support volume control."
+        },
+        "agentConfirmSound.focusTerminal": {
+          "type": "boolean",
+          "default": false,
+          "description": "When a pattern matches, bring the matching terminal into focus automatically."
         }
       }
     }
