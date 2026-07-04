@@ -1,0 +1,123 @@
+{
+  "name": "agent-confirm-sound",
+  "displayName": "Agent Bell",
+  "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
+  "version": "0.1.2",
+  "publisher": "chahe-dridi",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chahe-dridi/vscode-agent-bell.git"
+  },
+  "homepage": "https://github.com/chahe-dridi/vscode-agent-bell#readme",
+  "bugs": {
+    "url": "https://github.com/chahe-dridi/vscode-agent-bell/issues"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "sound",
+    "notification",
+    "bell",
+    "alert",
+    "claude",
+    "aider",
+    "terminal",
+    "confirm"
+  ],
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": ["AI", "Other"],
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "agentConfirmSound.toggle",
+        "title": "Agent Bell: Toggle Watching"
+      },
+      {
+        "command": "agentConfirmSound.testSound",
+        "title": "Agent Bell: Play Test Sound"
+      },
+      {
+        "command": "agentConfirmSound.showLog",
+        "title": "Agent Bell: Show Log"
+      }
+    ],
+    "configuration": {
+      "title": "Agent Bell",
+      "properties": {
+        "agentConfirmSound.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable watching terminals for confirmation prompts."
+        },
+        "agentConfirmSound.patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [
+            "\\(y\\s*/\\s*n\\)",
+            "\\[y\\s*/\\s*n\\]",
+            "\\(Y\\s*/\\s*n\\)",
+            "\\[Y\\s*/\\s*n\\]",
+            "do you want to proceed",
+            "do you want to continue",
+            "allow this (action|command|tool)",
+            "would you like to proceed",
+            "press enter to confirm",
+            "confirm\\?\\s*$",
+            "proceed\\?\\s*$",
+            "\\(yes/no\\)",
+            "type ['\"]?yes['\"]? to continue",
+            "allow (read|write|execute|bash|edit|create|delete)",
+            "bash\\s+command",
+            "do you want claude"
+          ],
+          "description": "Case-insensitive regex patterns matched against terminal output. A sound plays on the first match (then debounces). Tune these for the agents you use — check the output channel to see what's actually coming through."
+        },
+        "agentConfirmSound.terminalNameFilter": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Optional. If non-empty, only terminals whose name contains one of these strings (case-insensitive) are watched. Leave empty to watch all terminals. Example: [\"claude\", \"aider\"]"
+        },
+        "agentConfirmSound.soundPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to a custom sound file (.wav / .mp3 / .aiff). Leave empty to use the bundled default sound."
+        },
+        "agentConfirmSound.debounceMs": {
+          "type": "number",
+          "default": 4000,
+          "description": "Minimum time in milliseconds between sounds for the same terminal, to avoid repeated triggers on the same prompt."
+        },
+        "agentConfirmSound.volume": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Volume level from 0 (silent) to 1 (full). Applied via afplay on macOS and paplay on Linux. Windows SoundPlayer does not support volume control."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run compile && npx vsce package --out dist/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.93.0",
+    "typescript": "^5.4.0"
+  }
+}
