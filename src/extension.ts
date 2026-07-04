@@ -6,6 +6,7 @@ import * as os from 'node:os';
 let outputChannel: vscode.OutputChannel;
 let statusBarItem: vscode.StatusBarItem;
 let watching = false;
+let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
 // Compiled patterns cache — invalidated on config change.
 let cachedPatterns: RegExp[] | null = null;
@@ -87,6 +88,18 @@ function playSound(context: vscode.ExtensionContext) {
   child.unref();
 }
 
+function flashStatusBar() {
+  if (flashTimer) {
+    clearTimeout(flashTimer);
+  }
+  statusBarItem.text = '$(bell-dot) Agent Bell';
+  statusBarItem.color = new vscode.ThemeColor('notificationsInfoIcon.foreground');
+  flashTimer = setTimeout(() => {
+    updateStatusBar();
+    flashTimer = undefined;
+  }, 1500);
+}
+
 function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Terminal, chunk: string) {
   if (!watching) {
     return;
@@ -99,7 +112,8 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
     return;
   }
 
-  const matched = patterns.find((re) => re.test(stripAnsi(chunk)));
+  const clean = stripAnsi(chunk);
+  const matched = patterns.find((re) => re.test(clean));
   if (!matched) {
     return;
   }
@@ -112,6 +126,12 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
   lastTriggerAt.set(terminal, now);
 
   outputChannel.appendLine(`[match] "${terminal.name}" matched ${matched} at ${new Date(now).toISOString()}`);
+
+  if (getConfig().get<boolean>('focusTerminal', false)) {
+    terminal.show(true);
+  }
+
+  flashStatusBar();
   playSound(context);
 }
 
@@ -150,7 +170,6 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.command = 'agentConfirmSound.toggle';
   statusBarItem.show();
 
-  // Start in the state the user last set, defaulting to enabled.
   setWatching(getConfig().get<boolean>('enabled', true));
 
   context.subscriptions.push(
@@ -180,10 +199,32 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('agentConfirmSound.testSound', () => {
       outputChannel.appendLine('[info] test sound triggered.');
+      flashStatusBar();
       playSound(context);
     }),
     vscode.commands.registerCommand('agentConfirmSound.showLog', () => {
       outputChannel.show();
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.testPattern', async () => {
+      const input = await vscode.window.showInputBox({
+        prompt: 'Paste a line of terminal output to test against your patterns',
+        placeHolder: 'e.g. Allow this action? (y/n)',
+      });
+      if (input === undefined) {
+        return;
+      }
+      const clean = stripAnsi(input);
+      const patterns = getPatterns();
+      const matched = patterns.find((re) => re.test(clean));
+      if (matched) {
+        outputChannel.appendLine(`[test] ✅ MATCH — pattern: ${matched}`);
+        outputChannel.show();
+        vscode.window.showInformationMessage(`Agent Bell: matched — ${matched}`);
+      } else {
+        outputChannel.appendLine(`[test] ❌ no match for: ${clean}`);
+        outputChannel.show();
+        vscode.window.showWarningMessage('Agent Bell: no pattern matched. Check the log and adjust your patterns.');
+      }
     })
   );
 
@@ -191,5 +232,8 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  if (flashTimer) {
+    clearTimeout(flashTimer);
+  }
   lastTriggerAt.clear();
 }
