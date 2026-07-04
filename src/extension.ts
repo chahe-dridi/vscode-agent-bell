@@ -9,6 +9,7 @@ let statusBarItem: vscode.StatusBarItem;
 let watching = false;
 let flashTimer: ReturnType<typeof setTimeout> | undefined;
 let lastMatchLabel = '';
+let extensionContext: vscode.ExtensionContext;
 
 let cachedPatterns: RegExp[] | null = null;
 const lastTriggerAt = new Map<vscode.Terminal, number>();
@@ -91,7 +92,6 @@ function playSound(soundFile: string) {
   const child = cp.spawn(cmd, args, spawnOpts);
   child.on('error', (err) => {
     outputChannel.appendLine(`[error] sound playback failed (${cmd}): ${err.message}`);
-    outputChannel.appendLine(`[hint] check agentConfirmSound.sounds or set agentConfirmSound.soundPath.`);
   });
   child.unref();
 }
@@ -160,30 +160,33 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
   outputChannel.appendLine('[hook] Claude Code Stop + Notification hooks installed.');
+  await context.globalState.update('hookDecision', 'installed');
 }
 
-async function removeClaudeHook(): Promise<void> {
+async function removeClaudeHook(context: vscode.ExtensionContext): Promise<void> {
   const settings = readClaudeSettings();
   const hooks = settings['hooks'] as Record<string, unknown> | undefined;
-  if (!hooks) {
-    return;
-  }
-  for (const event of HOOK_EVENTS) {
-    const groups = hooks[event] as HookGroupRead[] | undefined;
-    if (groups) {
-      hooks[event] = groups
-        .map((g) => ({ ...g, hooks: (g.hooks ?? []).filter((h) => !h.command?.includes(HOOK_MARKER)) }))
-        .filter((g) => (g.hooks as unknown[]).length > 0);
+  if (hooks) {
+    for (const event of HOOK_EVENTS) {
+      const groups = hooks[event] as HookGroupRead[] | undefined;
+      if (groups) {
+        hooks[event] = groups
+          .map((g) => ({ ...g, hooks: (g.hooks ?? []).filter((h) => !h.command?.includes(HOOK_MARKER)) }))
+          .filter((g) => (g.hooks as unknown[]).length > 0);
+      }
     }
+    settings['hooks'] = hooks;
+    writeClaudeSettings(settings);
   }
+
   try {
     if (fs.existsSync(STABLE_SOUND_PATH)) {
       fs.unlinkSync(STABLE_SOUND_PATH);
     }
   } catch { /* ignore */ }
-  settings['hooks'] = hooks;
-  writeClaudeSettings(settings);
+
   outputChannel.appendLine('[hook] Claude Code hooks removed.');
+  await context.globalState.update('hookDecision', 'removed');
 }
 
 // ─── Terminal watching ────────────────────────────────────────────────────────
@@ -218,19 +221,22 @@ function terminalPassesNameFilter(terminal: vscode.Terminal): boolean {
 
 function updateStatusBar() {
   if (flashTimer) {
-    return; // let flash finish
+    return;
   }
   if (watching) {
     statusBarItem.text = lastMatchLabel
-      ? `$(bell) Agent Bell: On  ·  last alert ${lastMatchLabel}`
+      ? `$(bell) Agent Bell  ·  last alert ${lastMatchLabel}`
       : '$(bell) Agent Bell: On';
     statusBarItem.color = undefined;
+    statusBarItem.backgroundColor = undefined;
     statusBarItem.tooltip = 'Agent Bell is watching terminals. Click to pause.';
   } else {
     statusBarItem.text = '$(bell-slash) Agent Bell: Off';
-    statusBarItem.color = new vscode.ThemeColor('statusBarItem.warningForeground');
+    statusBarItem.color = undefined;
+    statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
     statusBarItem.tooltip = 'Agent Bell is paused. Click to resume watching.';
   }
+  statusBarItem.show();
 }
 
 function flashStatusBar(label: string) {
@@ -238,9 +244,11 @@ function flashStatusBar(label: string) {
   if (flashTimer) {
     clearTimeout(flashTimer);
   }
-  statusBarItem.text = `$(bell-dot) Agent Bell: Playing`;
-  statusBarItem.color = new vscode.ThemeColor('notificationsInfoIcon.foreground');
+  statusBarItem.text = `$(bell-dot) Agent Bell: Alert!`;
+  statusBarItem.color = undefined;
+  statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
   statusBarItem.tooltip = `Last alert: ${label}`;
+  statusBarItem.show();
   flashTimer = setTimeout(() => {
     flashTimer = undefined;
     updateStatusBar();
@@ -256,15 +264,18 @@ function setWatching(value: boolean) {
 // ─── Activation ──────────────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext) {
+  extensionContext = context;
   outputChannel = vscode.window.createOutputChannel('Agent Bell');
 
-  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -100);
   statusBarItem.command = 'agentConfirmSound.toggle';
   statusBarItem.show();
 
   setWatching(getConfig().get<boolean>('enabled', true));
 
-  if (!isHookInstalled()) {
+  // Only show the setup modal if the user hasn't made a decision yet
+  const hookDecision = context.globalState.get<string>('hookDecision');
+  if (!hookDecision && !isHookInstalled()) {
     vscode.window.showInformationMessage(
       [
         'Agent Bell — Claude Code Integration',
@@ -277,8 +288,8 @@ export function activate(context: vscode.ExtensionContext) {
         '2. Add Stop + Notification hooks to:',
         `   ${CLAUDE_SETTINGS_PATH}`,
         '',
-        '• Stop hook   → plays when Claude finishes its turn',
-        '• Notification hook → plays when Claude needs you to approve something',
+        '• Stop hook        → plays when Claude finishes its turn',
+        '• Notification hook → plays when Claude needs your approval',
         '',
         'Nothing is sent externally. Fully reversible via:',
         '"Agent Bell: Remove Claude Code Integration"',
@@ -286,12 +297,18 @@ export function activate(context: vscode.ExtensionContext) {
       { modal: true },
       'Set it up',
       'Not now'
-    ).then((choice) => {
+    ).then(async (choice) => {
       if (choice === 'Set it up') {
-        installClaudeHook(context)
-          .then(() => vscode.window.showInformationMessage("Agent Bell: Claude Code integration ready. You'll hear a sound when Claude finishes or needs your input."))
-          .catch((e) => vscode.window.showErrorMessage(`Agent Bell: failed to install hook — ${e}`));
+        try {
+          await installClaudeHook(context);
+          vscode.window.showInformationMessage("Agent Bell: Claude Code integration ready. You'll hear a sound when Claude finishes or needs your input.");
+        } catch (e) {
+          vscode.window.showErrorMessage(`Agent Bell: failed to install hook — ${e}`);
+        }
+      } else if (choice === 'Not now') {
+        await context.globalState.update('hookDecision', 'declined');
       }
+      // If dismissed (undefined), don't record a decision so we ask again next time
     });
   }
 
@@ -306,9 +323,6 @@ export function activate(context: vscode.ExtensionContext) {
       if (e.affectsConfiguration('agentConfirmSound.enabled')) {
         setWatching(getConfig().get<boolean>('enabled', true));
       }
-      if (e.affectsConfiguration('agentConfirmSound.sounds') || e.affectsConfiguration('agentConfirmSound.soundMode')) {
-        updateStatusBar();
-      }
     }),
     vscode.window.onDidCloseTerminal((terminal) => {
       lastTriggerAt.delete(terminal);
@@ -317,6 +331,11 @@ export function activate(context: vscode.ExtensionContext) {
       watchExecution(context, event.terminal, event.execution);
     }),
     vscode.commands.registerCommand('agentConfirmSound.toggle', () => {
+      // Clear any active flash before toggling so the state change is immediate
+      if (flashTimer) {
+        clearTimeout(flashTimer);
+        flashTimer = undefined;
+      }
       setWatching(!watching);
     }),
     vscode.commands.registerCommand('agentConfirmSound.testSound', () => {
@@ -415,8 +434,8 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       try {
-        await removeClaudeHook();
-        vscode.window.showInformationMessage('Agent Bell: Claude Code hook removed.');
+        await removeClaudeHook(context);
+        vscode.window.showInformationMessage('Agent Bell: Claude Code hook removed. Safe to uninstall the extension now.');
       } catch (e) {
         vscode.window.showErrorMessage(`Agent Bell: failed to remove hook — ${e}`);
       }
