@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.2.3] — 2026-07-04
+
+- Add: **PreToolUse hook** — plays a sound when Claude Code is about to run a Bash command, which is exactly when permission dialogs appear. You'll now hear the bell the moment Claude needs you to approve a command.
+
+## [0.2.2] — 2026-07-04
+
+- Fix: status bar moved to left side so it's always visible (right side gets clipped by VS Code built-ins)
+- Fix: status bar now uses warning background color when paused — more noticeable
+- Fix: toggling while a sound flash was active no longer delays the visual state change
+- Fix: setup modal no longer re-appears on every VS Code reload — remembers Yes/No decision in globalState
+- Add: "Remove Claude Code Integration" now confirms "Safe to uninstall now" when done
+- Add: **Agent Bell: Manage Sounds** and **Agent Bell: Add Sound File** commands (were missing from previous build)
+
+## [0.2.1] — 2026-07-04
+
+- Add: **Notification hook** — adds a second hook (`Notification` event) alongside `Stop` so you're notified when Claude Code sends background notifications
+- Add: **Multi-sound support** — `agentConfirmSound.sounds[]` list + `soundMode: "fixed" | "random"`
+- Add: **Agent Bell: Manage Sounds** command — QuickPick UI to add/remove sounds and toggle random mode
+- Add: **Agent Bell: Add Sound File** command — file picker for adding custom sounds
+- Fix: hook setup now shows a modal dialog listing exactly what will be changed before making any edits
+- Fix: `agentConfirmSound.volume` setting now actually applied on macOS (`afplay -v`) and Linux (`paplay --volume`)
+
 ## [0.2.0] — 2026-07-04
 
 - Add: **Claude Code integration** — on first install, Agent Bell offers to add a `Stop` hook to `~/.claude/settings.json` so you hear a sound every time Claude Code finishes its turn (works regardless of shell integration)
