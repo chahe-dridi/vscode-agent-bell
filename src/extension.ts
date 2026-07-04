@@ -29,13 +29,17 @@ function getConfig() {
 
 function buildHookCommand(soundFile: string): string {
   const platform = os.platform();
+  const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
+
   if (platform === 'darwin') {
-    return `afplay "${soundFile}"`;
+    return `afplay -v ${volume} "${soundFile}"`;
   } else if (platform === 'win32') {
+    // Windows SoundPlayer has no volume API — adjust system volume instead.
     const ps = soundFile.replace(/'/g, "''");
     return `powershell -NoProfile -NonInteractive -Command "(New-Object Media.SoundPlayer '${ps}').PlaySync();"`;
   } else {
-    return `paplay "${soundFile}" 2>/dev/null || aplay "${soundFile}" 2>/dev/null`;
+    const paVol = Math.round(volume * 65536);
+    return `paplay --volume=${paVol} "${soundFile}" 2>/dev/null || aplay "${soundFile}" 2>/dev/null`;
   }
 }
 
@@ -301,13 +305,30 @@ export function activate(context: vscode.ExtensionContext) {
   // Offer Claude Code hook setup on first install (non-blocking).
   if (!isHookInstalled()) {
     vscode.window.showInformationMessage(
-      'Agent Bell: Set up Claude Code integration? This adds a sound alert whenever Claude Code finishes its turn.',
-      'Yes, set it up',
+      [
+        'Agent Bell — Claude Code Integration',
+        '',
+        'This will make two changes to your local machine:',
+        '',
+        `1. Copy the notification sound to:`,
+        `   ${STABLE_SOUND_PATH}`,
+        '',
+        `2. Add Stop + Notification hooks to:`,
+        `   ${CLAUDE_SETTINGS_PATH}`,
+        '',
+        'The Stop hook plays when Claude finishes its turn.',
+        'The Notification hook plays when Claude needs you to approve something.',
+        '',
+        'Nothing is sent externally. You can undo this at any time via',
+        '"Agent Bell: Remove Claude Code Integration".',
+      ].join('\n'),
+      { modal: true },
+      'Set it up',
       'Not now'
     ).then((choice) => {
-      if (choice === 'Yes, set it up') {
+      if (choice === 'Set it up') {
         installClaudeHook(context).then(() => {
-          vscode.window.showInformationMessage('Agent Bell: Claude Code integration ready. You\'ll hear a sound when Claude finishes.');
+          vscode.window.showInformationMessage('Agent Bell: Claude Code integration ready. You\'ll hear a sound when Claude finishes its turn or needs your input.');
         }).catch((e) => {
           vscode.window.showErrorMessage(`Agent Bell: failed to install hook — ${e}`);
         });
