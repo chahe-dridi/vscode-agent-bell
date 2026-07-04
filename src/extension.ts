@@ -97,23 +97,25 @@ function writeClaudeSettings(settings: Record<string, unknown>) {
   fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 }
 
+// Hook event types we install into.
+const HOOK_EVENTS = ['Stop', 'Notification'] as const;
+
+type HookGroup = { matcher: string; hooks: Array<{ type: string; command: string }> };
+type HookGroupRead = { hooks?: Array<{ command?: string }> };
+
 function isHookInstalled(): boolean {
   const settings = readClaudeSettings();
   const hooks = settings['hooks'] as Record<string, unknown> | undefined;
   if (!hooks) {
     return false;
   }
-  const stopHooks = hooks['Stop'] as Array<{ hooks?: Array<{ command?: string }> }> | undefined;
-  if (!stopHooks) {
-    return false;
-  }
-  return stopHooks.some((group) =>
-    group.hooks?.some((h) => h.command?.includes(HOOK_MARKER))
-  );
+  return HOOK_EVENTS.some((event) => {
+    const groups = hooks[event] as HookGroupRead[] | undefined;
+    return groups?.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)));
+  });
 }
 
 async function installClaudeHook(context: vscode.ExtensionContext): Promise<void> {
-  // Copy bundled WAV to stable path so it survives extension updates.
   const bundled = path.join(context.extensionPath, 'media', 'notify.wav');
   try {
     const claudeDir = path.dirname(CLAUDE_SETTINGS_PATH);
@@ -129,18 +131,23 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   const settings = readClaudeSettings();
   const hooks = (settings['hooks'] ?? {}) as Record<string, unknown>;
-  const stopHooks = (hooks['Stop'] ?? []) as Array<{ matcher: string; hooks: Array<{ type: string; command: string }> }>;
-
-  stopHooks.push({
+  const entry: HookGroup = {
     matcher: '',
     hooks: [{ type: 'command', command: buildHookCommand(STABLE_SOUND_PATH) }],
-  });
+  };
 
-  hooks['Stop'] = stopHooks;
+  for (const event of HOOK_EVENTS) {
+    const existing = (hooks[event] ?? []) as HookGroup[];
+    const alreadyThere = existing.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)));
+    if (!alreadyThere) {
+      existing.push(entry);
+      hooks[event] = existing;
+    }
+  }
+
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
-
-  outputChannel.appendLine('[hook] Claude Code Stop hook installed.');
+  outputChannel.appendLine('[hook] Claude Code Stop + Notification hooks installed.');
 }
 
 async function removeClaudeHook(): Promise<void> {
@@ -150,17 +157,15 @@ async function removeClaudeHook(): Promise<void> {
     return;
   }
 
-  const stopHooks = hooks['Stop'] as Array<{ hooks?: Array<{ command?: string }> }> | undefined;
-  if (stopHooks) {
-    hooks['Stop'] = stopHooks
-      .map((group) => ({
-        ...group,
-        hooks: (group.hooks ?? []).filter((h) => !h.command?.includes(HOOK_MARKER)),
-      }))
-      .filter((group) => (group.hooks as unknown[]).length > 0);
+  for (const event of HOOK_EVENTS) {
+    const groups = hooks[event] as HookGroupRead[] | undefined;
+    if (groups) {
+      hooks[event] = groups
+        .map((g) => ({ ...g, hooks: (g.hooks ?? []).filter((h) => !h.command?.includes(HOOK_MARKER)) }))
+        .filter((g) => (g.hooks as unknown[]).length > 0);
+    }
   }
 
-  // Remove sound file if it exists.
   try {
     if (fs.existsSync(STABLE_SOUND_PATH)) {
       fs.unlinkSync(STABLE_SOUND_PATH);
@@ -169,7 +174,7 @@ async function removeClaudeHook(): Promise<void> {
 
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
-  outputChannel.appendLine('[hook] Claude Code Stop hook removed.');
+  outputChannel.appendLine('[hook] Claude Code hooks removed.');
 }
 
 // ─── Terminal watching ────────────────────────────────────────────────────────
