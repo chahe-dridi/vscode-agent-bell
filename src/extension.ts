@@ -8,10 +8,7 @@ let statusBarItem: vscode.StatusBarItem;
 let watching = false;
 let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
-// Compiled patterns cache — invalidated on config change.
 let cachedPatterns: RegExp[] | null = null;
-
-// Tracks last trigger time per terminal for debouncing. Cleaned up on terminal close.
 const lastTriggerAt = new Map<vscode.Terminal, number>();
 
 function stripAnsi(input: string): string {
@@ -70,7 +67,6 @@ function playSound(context: vscode.ExtensionContext) {
     const psPath = soundFile.replace(/'/g, "''");
     cmd = 'powershell';
     args = ['-NoProfile', '-NonInteractive', '-Command', `(New-Object Media.SoundPlayer '${psPath}').PlaySync();`];
-    // Do NOT detach on Windows — detached processes in a new group can lose audio device access.
     spawnOpts = { stdio: 'ignore' };
   } else {
     const paVol = Math.round(volume * 65536);
@@ -83,7 +79,7 @@ function playSound(context: vscode.ExtensionContext) {
   const child = cp.spawn(cmd, args, spawnOpts);
   child.on('error', (err) => {
     outputChannel.appendLine(`[error] sound playback failed (${cmd}): ${err.message}`);
-    outputChannel.appendLine(`[hint] set agentConfirmSound.soundPath to a .wav your system can play, or check that ${cmd} is available.`);
+    outputChannel.appendLine(`[hint] set agentConfirmSound.soundPath to a .wav your system can play.`);
   });
   child.unref();
 }
@@ -100,6 +96,14 @@ function flashStatusBar() {
   }, 1500);
 }
 
+function alert(context: vscode.ExtensionContext, terminal: vscode.Terminal) {
+  if (getConfig().get<boolean>('focusTerminal', false)) {
+    terminal.show(true);
+  }
+  flashStatusBar();
+  playSound(context);
+}
+
 function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Terminal, chunk: string) {
   if (!watching) {
     return;
@@ -113,6 +117,11 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
   }
 
   const clean = stripAnsi(chunk);
+
+  if (getConfig().get<boolean>('debugLog', false)) {
+    outputChannel.appendLine(`[debug] terminal="${terminal.name}" chunk=${JSON.stringify(clean.slice(0, 200))}`);
+  }
+
   const matched = patterns.find((re) => re.test(clean));
   if (!matched) {
     return;
@@ -126,13 +135,7 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
   lastTriggerAt.set(terminal, now);
 
   outputChannel.appendLine(`[match] "${terminal.name}" matched ${matched} at ${new Date(now).toISOString()}`);
-
-  if (getConfig().get<boolean>('focusTerminal', false)) {
-    terminal.show(true);
-  }
-
-  flashStatusBar();
-  playSound(context);
+  alert(context, terminal);
 }
 
 async function watchExecution(
@@ -214,8 +217,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const clean = stripAnsi(input);
-      const patterns = getPatterns();
-      const matched = patterns.find((re) => re.test(clean));
+      const matched = getPatterns().find((re) => re.test(clean));
       if (matched) {
         outputChannel.appendLine(`[test] ✅ MATCH — pattern: ${matched}`);
         outputChannel.show();
@@ -228,7 +230,8 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  outputChannel.appendLine(`[info] Agent Bell activated. Watching: ${watching}`);
+  outputChannel.appendLine(`[info] Agent Bell ${context.extension.packageJSON.version} activated. Watching: ${watching}`);
+  outputChannel.appendLine(`[info] Note: requires shell integration in the terminal. Claude Code UI sidebar prompts are in a webview and cannot be watched via terminal output.`);
 }
 
 export function deactivate() {
