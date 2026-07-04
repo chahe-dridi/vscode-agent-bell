@@ -117,17 +117,22 @@ function writeClaudeSettings(settings: Record<string, unknown>) {
   fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', 'utf8');
 }
 
-const HOOK_EVENTS = ['Stop', 'Notification'] as const;
+// Each entry: which Claude Code hook event to register, and what matcher to use.
+// PreToolUse fires right before Claude executes a tool — this is when permission dialogs appear.
+const HOOK_CONFIGS = [
+  { event: 'Stop',        matcher: '' },
+  { event: 'Notification', matcher: '' },
+  { event: 'PreToolUse',  matcher: 'Bash' },
+] as const;
+
 type HookGroup = { matcher: string; hooks: Array<{ type: string; command: string }> };
 type HookGroupRead = { hooks?: Array<{ command?: string }> };
 
 function isHookInstalled(): boolean {
   const settings = readClaudeSettings();
   const hooks = settings['hooks'] as Record<string, unknown> | undefined;
-  if (!hooks) {
-    return false;
-  }
-  return HOOK_EVENTS.some((event) => {
+  if (!hooks) { return false; }
+  return HOOK_CONFIGS.some(({ event }) => {
     const groups = hooks[event] as HookGroupRead[] | undefined;
     return groups?.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)));
   });
@@ -144,12 +149,10 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   const settings = readClaudeSettings();
   const hooks = (settings['hooks'] ?? {}) as Record<string, unknown>;
-  const entry: HookGroup = {
-    matcher: '',
-    hooks: [{ type: 'command', command: buildHookCommand(STABLE_SOUND_PATH) }],
-  };
+  const cmd = buildHookCommand(STABLE_SOUND_PATH);
 
-  for (const event of HOOK_EVENTS) {
+  for (const { event, matcher } of HOOK_CONFIGS) {
+    const entry: HookGroup = { matcher, hooks: [{ type: 'command', command: cmd }] };
     const existing = (hooks[event] ?? []) as HookGroup[];
     if (!existing.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)))) {
       existing.push(entry);
@@ -159,7 +162,7 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
-  outputChannel.appendLine('[hook] Claude Code Stop + Notification hooks installed.');
+  outputChannel.appendLine('[hook] Claude Code Stop + Notification + PreToolUse(Bash) hooks installed.');
   await context.globalState.update('hookDecision', 'installed');
 }
 
@@ -167,7 +170,7 @@ async function removeClaudeHook(context: vscode.ExtensionContext): Promise<void>
   const settings = readClaudeSettings();
   const hooks = settings['hooks'] as Record<string, unknown> | undefined;
   if (hooks) {
-    for (const event of HOOK_EVENTS) {
+    for (const { event } of HOOK_CONFIGS) {
       const groups = hooks[event] as HookGroupRead[] | undefined;
       if (groups) {
         hooks[event] = groups
@@ -180,9 +183,7 @@ async function removeClaudeHook(context: vscode.ExtensionContext): Promise<void>
   }
 
   try {
-    if (fs.existsSync(STABLE_SOUND_PATH)) {
-      fs.unlinkSync(STABLE_SOUND_PATH);
-    }
+    if (fs.existsSync(STABLE_SOUND_PATH)) { fs.unlinkSync(STABLE_SOUND_PATH); }
   } catch { /* ignore */ }
 
   outputChannel.appendLine('[hook] Claude Code hooks removed.');
@@ -289,7 +290,8 @@ export function activate(context: vscode.ExtensionContext) {
         `   ${CLAUDE_SETTINGS_PATH}`,
         '',
         '• Stop hook        → plays when Claude finishes its turn',
-        '• Notification hook → plays when Claude needs your approval',
+        '• Notification hook → plays when Claude sends a background notification',
+        '• PreToolUse hook  → plays when Claude is about to run a Bash command',
         '',
         'Nothing is sent externally. Fully reversible via:',
         '"Agent Bell: Remove Claude Code Integration"',
