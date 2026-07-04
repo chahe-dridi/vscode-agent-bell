@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Agent Bell",
   "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -54,6 +54,14 @@
       {
         "command": "agentConfirmSound.testPattern",
         "title": "Agent Bell: Test Pattern"
+      },
+      {
+        "command": "agentConfirmSound.setupClaudeHook",
+        "title": "Agent Bell: Set Up Claude Code Integration"
+      },
+      {
+        "command": "agentConfirmSound.removeClaudeHook",
+        "title": "Agent Bell: Remove Claude Code Integration"
       }
     ],
     "configuration": {

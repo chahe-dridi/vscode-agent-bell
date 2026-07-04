@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0] — 2026-07-04
+
+- Add: **Claude Code integration** — on first install, Agent Bell offers to add a `Stop` hook to `~/.claude/settings.json` so you hear a sound every time Claude Code finishes its turn (works regardless of shell integration)
+- Add: sound file copied to `~/.claude/agent-bell-notify.wav` for a stable hook path that survives extension updates
+- Add: **Agent Bell: Set Up Claude Code Integration** command — install the hook manually
+- Add: **Agent Bell: Remove Claude Code Integration** command — cleanly remove the hook and sound file
+- Add: hook status shown in the output channel on activation
+
 ## [0.1.4] — 2026-07-04
 
 - Add: `agentConfirmSound.debugLog` setting — logs every terminal chunk after ANSI stripping so you can see exactly what text reaches the extension and tune patterns accordingly

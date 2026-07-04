@@ -75,3 +75,6 @@ Instead of per-terminal debounce, add a global cooldown so rapid fires across mu
 |---|---|
 | 0.1.0 | Initial release — sound on pattern match, mute toggle, cross-platform |
 | 0.1.2 | Windows sound fix, memory cleanup, toggle watching, pattern cache |
+| 0.1.3 | Status bar flash, focus terminal option, pattern tester command, more Claude Code patterns |
+| 0.1.4 | Debug log mode to trace terminal chunks |
+| 0.2.0 | Claude Code hook integration — auto-installs Stop hook into ~/.claude/settings.json |
