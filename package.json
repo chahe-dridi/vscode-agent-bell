@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Agent Bell",
   "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -118,6 +118,11 @@
           "type": "boolean",
           "default": false,
           "description": "When a pattern matches, bring the matching terminal into focus automatically."
+        },
+        "agentConfirmSound.debugLog": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log every terminal chunk to the output channel (after ANSI stripping). Use this to see exactly what text reaches Agent Bell and tune your patterns. Disable when done — it is verbose."
         }
       }
     }

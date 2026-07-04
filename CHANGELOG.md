@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.4] — 2026-07-04
+
+- Add: `agentConfirmSound.debugLog` setting — logs every terminal chunk after ANSI stripping so you can see exactly what text reaches the extension and tune patterns accordingly
+- Fix: log version number on activation
+
 ## [0.1.3] — 2026-07-04
 
 - Add: status bar flashes on match (visual alert alongside sound)
