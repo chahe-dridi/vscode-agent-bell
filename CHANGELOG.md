@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.4] — 2026-07-06
+
+- Fix: rework **Manage Sounds** UI — sounds now show an active indicator (`✓`), clicking any sound makes it the active one immediately
+- Add: **volume picker** in Manage Sounds — choose 25 / 50 / 75 / 100% or a custom value (applies on macOS/Linux; Windows uses system volume)
+- Add: after adding a sound file, a prompt asks "Use this sound now?" so it activates without extra steps
+- Add: active sound can be previewed or removed directly from the menu
+- Add: menu loops after each action so you can see the updated state without reopening
+
 ## [0.2.3] — 2026-07-04
 
 - Add: **PreToolUse hook** — plays a sound when Claude Code is about to run a Bash command, which is exactly when permission dialogs appear. You'll now hear the bell the moment Claude needs you to approve a command.
