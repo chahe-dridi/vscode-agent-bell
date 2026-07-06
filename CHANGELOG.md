@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5] — 2026-07-06
+
+- Fix: **Toggle off now silences Claude Code hooks** — creates a mute flag file (`~/.claude/agent-bell-mute`) that all hooks check before playing; hooks are immediately silent when you pause Agent Bell
+- Fix: **Active sound now syncs to hooks** — switching to a different sound in Manage Sounds immediately copies it to `~/.claude/agent-bell-notify.wav` so hooks play the same sound
+- Fix: **Volume now works on Windows** — WAV samples are scaled in memory before playback instead of relying on `SoundPlayer` (which has no volume API); hooks also get a volume-scaled copy of the sound file on install
+- Fix: existing hooks auto-migrated on startup to include the mute-flag check
+
 ## [0.2.4] — 2026-07-06
 
 - Fix: rework **Manage Sounds** UI — sounds now show an active indicator (`✓`), clicking any sound makes it the active one immediately
