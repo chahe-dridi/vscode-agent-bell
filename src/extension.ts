@@ -355,67 +355,176 @@ export function activate(context: vscode.ExtensionContext) {
         filters: { 'Sound files': ['wav', 'mp3', 'aiff', 'ogg', 'flac'] },
         title: 'Add sound files to Agent Bell',
       });
-      if (!uris || uris.length === 0) {
-        return;
-      }
+      if (!uris || uris.length === 0) { return; }
+
       const current = getConfig().get<string[]>('sounds', []);
       const added = uris.map((u) => u.fsPath).filter((p) => !current.includes(p));
-      await getConfig().update('sounds', [...current, ...added], vscode.ConfigurationTarget.Global);
-      vscode.window.showInformationMessage(`Agent Bell: added ${added.length} sound file(s). Mode: ${getConfig().get('soundMode', 'fixed')}.`);
-    }),
-    vscode.commands.registerCommand('agentConfirmSound.chooseSounds', async () => {
-      const sounds = getConfig().get<string[]>('sounds', []);
-      const bundledLabel = '$(file-media) Bundled (default)';
-      const mode = getConfig().get<string>('soundMode', 'fixed');
-
-      const items: vscode.QuickPickItem[] = [
-        {
-          label: bundledLabel,
-          description: 'notify.wav included with Agent Bell',
-          picked: sounds.length === 0,
-        },
-        ...sounds.map((s) => ({
-          label: `$(file-media) ${path.basename(s)}`,
-          description: s,
-          picked: true,
-        })),
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        {
-          label: `$(add) Add sound file…`,
-          description: 'Pick a .wav / .mp3 / .aiff file',
-        },
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        {
-          label: mode === 'random' ? '$(check) Random mode: On' : '$(circle-slash) Random mode: Off',
-          description: mode === 'random' ? 'Click to use fixed (first) sound' : 'Click to pick randomly from all sounds',
-        },
-      ];
-
-      const pick = await vscode.window.showQuickPick(items, {
-        title: 'Agent Bell — Manage Sounds',
-        placeHolder: 'Select an action',
-      });
-
-      if (!pick) {
+      if (added.length === 0) {
+        vscode.window.showInformationMessage('Agent Bell: those files are already in the list.');
         return;
       }
 
-      if (pick.label.includes('Add sound file')) {
-        await vscode.commands.executeCommand('agentConfirmSound.addSound');
-      } else if (pick.label.includes('Random mode')) {
-        const newMode = mode === 'random' ? 'fixed' : 'random';
-        await getConfig().update('soundMode', newMode, vscode.ConfigurationTarget.Global);
-        vscode.window.showInformationMessage(`Agent Bell: sound mode set to ${newMode}.`);
-      } else if (pick.description && pick.description !== 'notify.wav included with Agent Bell') {
-        const remove = await vscode.window.showWarningMessage(
-          `Remove "${path.basename(pick.description)}" from the list?`,
-          'Remove', 'Cancel'
-        );
-        if (remove === 'Remove') {
-          const updated = sounds.filter((s) => s !== pick.description);
-          await getConfig().update('sounds', updated, vscode.ConfigurationTarget.Global);
-          vscode.window.showInformationMessage('Agent Bell: sound removed.');
+      // Add to list
+      const updated = [...current, ...added];
+      await getConfig().update('sounds', updated, vscode.ConfigurationTarget.Global);
+
+      // Ask if they want to activate the first added sound
+      const activate = await vscode.window.showInformationMessage(
+        `Added: ${added.map((p) => path.basename(p)).join(', ')}`,
+        'Use this sound now', 'Keep current'
+      );
+      if (activate === 'Use this sound now') {
+        // Move new sound to front, switch to fixed mode
+        const withNew = [added[0], ...updated.filter((s) => s !== added[0])];
+        await getConfig().update('sounds', withNew, vscode.ConfigurationTarget.Global);
+        await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage(`Agent Bell: now using ${path.basename(added[0])}.`);
+      }
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.chooseSounds', async () => {
+      // Loop so the menu re-opens after each action (shows updated state)
+      while (true) {
+        const sounds = getConfig().get<string[]>('sounds', []);
+        const mode = getConfig().get<string>('soundMode', 'fixed');
+        const volume = getConfig().get<number>('volume', 1);
+        const isRandom = mode === 'random';
+        const isBundledActive = !isRandom && sounds.length === 0;
+
+        const items: vscode.QuickPickItem[] = [];
+
+        // ── Sounds ──────────────────────────────────────────────────────────
+        items.push({
+          label: isBundledActive ? '$(check) Bundled  (default)' : '$(file-media) Bundled  (default)',
+          description: 'notify.wav included with Agent Bell',
+          detail: isBundledActive ? 'Active' : 'Click to switch to this sound',
+        });
+
+        for (let i = 0; i < sounds.length; i++) {
+          const isActive = !isRandom && i === 0;
+          items.push({
+            label: isActive ? `$(check) ${path.basename(sounds[i])}` : `$(file-media) ${path.basename(sounds[i])}`,
+            description: sounds[i],
+            detail: isActive ? 'Active — click to preview or remove' : 'Click to make this the active sound',
+          });
         }
+
+        // ── Actions ──────────────────────────────────────────────────────────
+        items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+        items.push({
+          label: '$(add) Add sound file…',
+          description: 'Browse for .wav / .mp3 / .aiff',
+        });
+        items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
+        items.push({
+          label: `$(unmute) Volume: ${Math.round(volume * 100)}%`,
+          description: os.platform() === 'win32'
+            ? 'Works on macOS / Linux — Windows uses system volume'
+            : 'Click to change',
+        });
+        items.push({
+          label: isRandom ? '$(check) Random mode: On' : '$(circle-slash) Random mode: Off',
+          description: isRandom
+            ? 'Picks a random sound each time — click to use fixed'
+            : 'Always plays the active sound — click to randomise',
+        });
+
+        const pick = await vscode.window.showQuickPick(items, {
+          title: 'Agent Bell — Sounds',
+          placeHolder: 'Click a sound to activate it, or choose an action',
+        });
+
+        if (!pick) { return; }
+
+        // ── Add sound ────────────────────────────────────────────────────────
+        if (pick.label.includes('Add sound file')) {
+          await vscode.commands.executeCommand('agentConfirmSound.addSound');
+          continue;
+        }
+
+        // ── Volume ───────────────────────────────────────────────────────────
+        if (pick.label.includes('Volume:')) {
+          const volPick = await vscode.window.showQuickPick(
+            [
+              { label: '25%' }, { label: '50%' }, { label: '75%' }, { label: '100%' },
+              { label: 'Custom…', description: 'Enter any value 0–100' },
+            ],
+            { title: `Agent Bell — Volume  (current: ${Math.round(volume * 100)}%)` }
+          );
+          if (!volPick) { continue; }
+          let newVol: number;
+          if (volPick.label === 'Custom…') {
+            const input = await vscode.window.showInputBox({
+              prompt: 'Volume (0 = silent, 100 = full)',
+              value: String(Math.round(volume * 100)),
+              validateInput: (v) => {
+                const n = parseInt(v, 10);
+                return isNaN(n) || n < 0 || n > 100 ? 'Enter a number from 0 to 100' : undefined;
+              },
+            });
+            if (input === undefined) { continue; }
+            newVol = parseInt(input, 10) / 100;
+          } else {
+            newVol = parseInt(volPick.label, 10) / 100;
+          }
+          await getConfig().update('volume', newVol, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage(`Agent Bell: volume set to ${Math.round(newVol * 100)}%.`);
+          continue;
+        }
+
+        // ── Random mode toggle ────────────────────────────────────────────────
+        if (pick.label.includes('Random mode')) {
+          const newMode = isRandom ? 'fixed' : 'random';
+          await getConfig().update('soundMode', newMode, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage(
+            newMode === 'random'
+              ? 'Agent Bell: random mode on — will shuffle through all sounds.'
+              : 'Agent Bell: fixed mode — will play the active sound every time.'
+          );
+          continue;
+        }
+
+        // ── Sound clicked ─────────────────────────────────────────────────────
+        const isBundled = pick.description === 'notify.wav included with Agent Bell';
+
+        if (isBundled) {
+          if (!isBundledActive) {
+            // Switch to bundled: clear the list
+            await getConfig().update('sounds', [], vscode.ConfigurationTarget.Global);
+            await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage('Agent Bell: switched to bundled sound.');
+          }
+          return;
+        }
+
+        // Custom sound
+        const soundPath = pick.description!;
+        const isActive = !isRandom && sounds[0] === soundPath;
+
+        if (isActive) {
+          // Active sound: offer preview or remove
+          const action = await vscode.window.showQuickPick(
+            [
+              { label: '$(play) Preview', description: path.basename(soundPath) },
+              { label: '$(trash) Remove from list', description: path.basename(soundPath) },
+            ],
+            { title: `${path.basename(soundPath)}` }
+          );
+          if (!action) { continue; }
+          if (action.label.includes('Preview')) {
+            playSound(soundPath);
+          } else if (action.label.includes('Remove')) {
+            const updated2 = sounds.filter((s) => s !== soundPath);
+            await getConfig().update('sounds', updated2, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage(`Agent Bell: removed ${path.basename(soundPath)}.`);
+          }
+        } else {
+          // Inactive sound: make it active (move to front)
+          const reordered = [soundPath, ...sounds.filter((s) => s !== soundPath)];
+          await getConfig().update('sounds', reordered, vscode.ConfigurationTarget.Global);
+          await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage(`Agent Bell: now using ${path.basename(soundPath)}.`);
+        }
+        continue;
       }
     }),
     vscode.commands.registerCommand('agentConfirmSound.setupClaudeHook', async () => {
