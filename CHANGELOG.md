@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.6] — 2026-07-16
+
+- Add: **alert on any command end** — plays a sound whenever a terminal command finishes (controlled by `alertOnCommandEnd`, default on). Quick commands are filtered by `commandEndMinDurationMs` (default 5s) so only long-running tasks like builds, tests, or deploys trigger it.
+- Add: **OS notification when unfocused** — when VS Code is not the active window and an alert fires, shows a system notification: balloon tip on Windows, notification center on macOS, `notify-send` on Linux. Controlled by `osNotification`, default on.
+
 ## [0.2.5] — 2026-07-06
 
 - Fix: **Toggle off now silences Claude Code hooks** — creates a mute flag file (`~/.claude/agent-bell-mute`) that all hooks check before playing; hooks are immediately silent when you pause Agent Bell

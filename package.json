@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Agent Bell",
   "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -134,6 +134,21 @@
           "type": "boolean",
           "default": false,
           "description": "When a pattern matches, bring the matching terminal into focus automatically."
+        },
+        "agentConfirmSound.alertOnCommandEnd": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play a sound when any terminal command finishes (respects commandEndMinDurationMs). Useful for long-running builds, tests, or deploys — you'll hear the bell when they're done."
+        },
+        "agentConfirmSound.commandEndMinDurationMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Minimum command duration in milliseconds before alertOnCommandEnd fires. Default 5000ms (5s) — quick commands like ls or cd are ignored, only long-running ones trigger the alert."
+        },
+        "agentConfirmSound.osNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show an OS-level notification (Windows balloon tip / macOS notification center / Linux notify-send) when an alert fires and VS Code is not in focus. Lets you know something needs attention even when you're on another screen."
         },
         "agentConfirmSound.debugLog": {
           "type": "boolean",

@@ -12,7 +12,8 @@ let lastMatchLabel = '';
 let extensionContext: vscode.ExtensionContext;
 
 let cachedPatterns: RegExp[] | null = null;
-const lastTriggerAt = new Map<vscode.Terminal, number>();
+const lastTriggerAt   = new Map<vscode.Terminal, number>();
+const commandStartAt  = new Map<vscode.Terminal, number>();
 
 const STABLE_SOUND_PATH = path.join(os.homedir(), '.claude', 'agent-bell-notify.wav');
 const MUTE_FLAG_PATH    = path.join(os.homedir(), '.claude', 'agent-bell-mute');
@@ -46,6 +47,37 @@ function pickSoundFile(context: vscode.ExtensionContext): string {
   }
 
   return sounds[0];
+}
+
+// ─── OS notification ─────────────────────────────────────────────────────────
+
+function showOsNotification(message: string) {
+  if (!getConfig().get<boolean>('osNotification', true)) { return; }
+  const platform = os.platform();
+  if (platform === 'win32') {
+    // Balloon tip via System.Windows.Forms — works on all Windows versions
+    const msg = message.replace(/'/g, "''");
+    const script = [
+      `Add-Type -AssemblyName System.Windows.Forms`,
+      `$n = New-Object System.Windows.Forms.NotifyIcon`,
+      `$n.Icon = [System.Drawing.SystemIcons]::Information`,
+      `$n.Visible = $true`,
+      `$n.BalloonTipTitle = 'Agent Bell'`,
+      `$n.BalloonTipText = '${msg}'`,
+      `$n.BalloonTipIcon = 'Info'`,
+      `$n.ShowBalloonTip(5000)`,
+      `Start-Sleep -Seconds 5`,
+      `$n.Dispose()`,
+    ].join('; ');
+    cp.spawn('powershell', ['-NoProfile', '-NonInteractive', '-STA', '-WindowStyle', 'Hidden', '-Command', script],
+      { stdio: 'ignore' }).unref();
+  } else if (platform === 'darwin') {
+    cp.spawn('osascript', ['-e', `display notification "${message.replace(/"/g, '\\"')}" with title "Agent Bell"`],
+      { stdio: 'ignore', detached: true }).unref();
+  } else {
+    cp.spawn('notify-send', ['Agent Bell', message, '--expire-time=5000'],
+      { stdio: 'ignore', detached: true }).unref();
+  }
 }
 
 // ─── Sound playback ──────────────────────────────────────────────────────────
@@ -426,9 +458,43 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.window.onDidCloseTerminal((terminal) => {
       lastTriggerAt.delete(terminal);
+      commandStartAt.delete(terminal);
     }),
     vscode.window.onDidStartTerminalShellExecution((event) => {
+      commandStartAt.set(event.terminal, Date.now());
       watchExecution(context, event.terminal, event.execution);
+    }),
+    vscode.window.onDidEndTerminalShellExecution((event) => {
+      if (!watching) { return; }
+      if (!getConfig().get<boolean>('alertOnCommandEnd', true)) { return; }
+      if (!terminalPassesNameFilter(event.terminal)) { return; }
+
+      const started = commandStartAt.get(event.terminal) ?? 0;
+      commandStartAt.delete(event.terminal);
+      const elapsed = Date.now() - started;
+      const minMs = getConfig().get<number>('commandEndMinDurationMs', 5000);
+      if (elapsed < minMs) { return; }
+
+      const debounceMs = getConfig().get<number>('debounceMs', 4000);
+      const now = Date.now();
+      if ((lastTriggerAt.get(event.terminal) ?? 0) + debounceMs > now) { return; }
+      lastTriggerAt.set(event.terminal, now);
+
+      const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const exit = event.exitCode;
+      outputChannel.appendLine(`[done] "${event.terminal.name}" finished in ${Math.round(elapsed / 1000)}s (exit ${exit ?? '?'})`);
+
+      if (getConfig().get<boolean>('focusTerminal', false)) { event.terminal.show(true); }
+
+      flashStatusBar(timeLabel);
+      triggerSound(context);
+
+      if (!vscode.window.state.focused) {
+        const label = exit !== undefined && exit !== 0
+          ? `"${event.terminal.name}" failed (exit ${exit})`
+          : `"${event.terminal.name}" finished`;
+        showOsNotification(label);
+      }
     }),
     vscode.commands.registerCommand('agentConfirmSound.toggle', () => {
       // Clear any active flash before toggling so the state change is immediate
@@ -732,6 +798,10 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
 
   flashStatusBar(timeLabel);
   triggerSound(context);
+
+  if (!vscode.window.state.focused) {
+    showOsNotification(`"${terminal.name}" needs your attention`);
+  }
 }
 
 export function deactivate() {
