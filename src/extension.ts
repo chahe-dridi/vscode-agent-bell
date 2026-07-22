@@ -203,15 +203,21 @@ function isHookInstalled(): boolean {
   });
 }
 
-// Copy the currently active sound (scaled by volume) to the stable hook path.
-function syncHookSound(context: vscode.ExtensionContext) {
+// Copy the given sound (or the currently active one) scaled by volume to the stable hook path.
+// Pass `sourcePath` explicitly whenever you already know which file should be active — this avoids
+// reading config that may not have been committed to disk yet.
+function syncHookSound(context: vscode.ExtensionContext, sourcePath?: string) {
   try {
-    const src = pickSoundFile(context);
+    const src = sourcePath ?? pickSoundFile(context);
+    if (!fs.existsSync(src)) {
+      outputChannel.appendLine(`[hook] syncHookSound skipped — file not found: ${src}`);
+      return;
+    }
     const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
     const raw = fs.readFileSync(src);
     const out = src.toLowerCase().endsWith('.wav') ? scaleWavBuffer(raw, volume) : raw;
     fs.writeFileSync(STABLE_SOUND_PATH, out);
-    outputChannel.appendLine(`[hook] synced sound → ${path.basename(src)} at vol ${Math.round(volume * 100)}%`);
+    outputChannel.appendLine(`[hook] synced → ${src} at vol ${Math.round(volume * 100)}%`);
   } catch (e) {
     outputChannel.appendLine(`[hook] syncHookSound failed: ${e}`);
   }
@@ -445,15 +451,12 @@ export function activate(context: vscode.ExtensionContext) {
       if (e.affectsConfiguration('agentConfirmSound.enabled')) {
         setWatching(getConfig().get<boolean>('enabled', true));
       }
-      if (
-        e.affectsConfiguration('agentConfirmSound.volume') ||
-        e.affectsConfiguration('agentConfirmSound.sounds') ||
-        e.affectsConfiguration('agentConfirmSound.soundMode')
-      ) {
-        if (isHookInstalled()) {
-          syncHookSound(context);
-          refreshHookCommands();
-        }
+      // Volume changes need a re-sync so the hook file gets re-scaled with the new amplitude.
+      // Sounds/soundMode are NOT synced here — chooseSounds and addSound pass the explicit path
+      // directly to syncHookSound to avoid reading config that may not have settled yet.
+      if (e.affectsConfiguration('agentConfirmSound.volume') && isHookInstalled()) {
+        syncHookSound(context);
+        refreshHookCommands();
       }
     }),
     vscode.window.onDidCloseTerminal((terminal) => {
@@ -469,10 +472,11 @@ export function activate(context: vscode.ExtensionContext) {
       if (!getConfig().get<boolean>('alertOnCommandEnd', true)) { return; }
       if (!terminalPassesNameFilter(event.terminal)) { return; }
 
-      const started = commandStartAt.get(event.terminal) ?? 0;
+      const started = commandStartAt.get(event.terminal);
       commandStartAt.delete(event.terminal);
+      if (started === undefined) { return; }  // command started before extension was active
       const elapsed = Date.now() - started;
-      const minMs = getConfig().get<number>('commandEndMinDurationMs', 5000);
+      const minMs = getConfig().get<number>('commandEndMinDurationMs', 3000);
       if (elapsed < minMs) { return; }
 
       const debounceMs = getConfig().get<number>('debounceMs', 4000);
@@ -542,7 +546,7 @@ export function activate(context: vscode.ExtensionContext) {
         const withNew = [added[0], ...updated.filter((s) => s !== added[0])];
         await getConfig().update('sounds', withNew, vscode.ConfigurationTarget.Global);
         await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
-        syncHookSound(context);
+        if (isHookInstalled()) { syncHookSound(context, added[0]); }
         vscode.window.showInformationMessage(`Agent Bell: now using ${path.basename(added[0])}.`);
       }
     }),
@@ -656,7 +660,9 @@ export function activate(context: vscode.ExtensionContext) {
             // Switch to bundled: clear the list
             await getConfig().update('sounds', [], vscode.ConfigurationTarget.Global);
             await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
-            syncHookSound(context);
+            if (isHookInstalled()) {
+              syncHookSound(context, path.join(context.extensionPath, 'media', 'notify.wav'));
+            }
             vscode.window.showInformationMessage('Agent Bell: switched to bundled sound.');
           }
           return;
@@ -688,7 +694,7 @@ export function activate(context: vscode.ExtensionContext) {
           const reordered = [soundPath, ...sounds.filter((s) => s !== soundPath)];
           await getConfig().update('sounds', reordered, vscode.ConfigurationTarget.Global);
           await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
-          syncHookSound(context);
+          if (isHookInstalled()) { syncHookSound(context, soundPath); }
           vscode.window.showInformationMessage(`Agent Bell: now using ${path.basename(soundPath)}.`);
         }
         continue;

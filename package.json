@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Agent Bell",
   "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -142,8 +142,8 @@
         },
         "agentConfirmSound.commandEndMinDurationMs": {
           "type": "number",
-          "default": 5000,
-          "description": "Minimum command duration in milliseconds before alertOnCommandEnd fires. Default 5000ms (5s) — quick commands like ls or cd are ignored, only long-running ones trigger the alert."
+          "default": 3000,
+          "description": "Minimum command duration in milliseconds before alertOnCommandEnd fires. Default 3000ms (3s) — quick commands like ls or cd are ignored, only long-running ones trigger the alert."
         },
         "agentConfirmSound.osNotification": {
           "type": "boolean",

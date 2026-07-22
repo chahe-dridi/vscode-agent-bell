@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.7] — 2026-07-22
+
+- Fix: **changing notification sound now reliably updates the hook** — `syncHookSound` now receives the exact file path directly from the UI action instead of re-reading config that may not have settled yet; also removed redundant syncs from `onDidChangeConfiguration` that were firing with stale config values between two back-to-back updates
+- Fix: **command detection no longer fires for commands that started before the extension loaded** — previously `commandStartAt.get() ?? 0` caused a huge elapsed time (always above the threshold), so orphaned command-ends would always trigger a spurious alert; now those events are silently skipped
+- Change: **`commandEndMinDurationMs` default lowered from 5s to 3s** — catches more real long-running commands without catching quick ones
+
 ## [0.2.6] — 2026-07-16
 
 - Add: **alert on any command end** — plays a sound whenever a terminal command finishes (controlled by `alertOnCommandEnd`, default on). Quick commands are filtered by `commandEndMinDurationMs` (default 5s) so only long-running tasks like builds, tests, or deploys trigger it.
