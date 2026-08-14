@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.8] — 2026-08-14
+
+- Fix: **non-WAV files (MP3, OGG, etc.) no longer break the Claude Code hook on Windows** — `Media.SoundPlayer` only supports WAV; when the active sound is a non-WAV file, the hook now falls back to the bundled WAV and logs the reason instead of writing MP3 bytes to a `.wav` path and silently failing
+- Fix: **double alert on long-running commands** — if a pattern-match alert already fired during a command's execution, the command-end alert is suppressed; previously both would fire for commands running longer than `debounceMs` (4s)
+- Fix: **concurrent sound plays no longer race on a shared temp file** — each Windows WAV-scaled playback now writes to a unique temp filename (`agent-bell-{timestamp}.wav`) instead of overwriting a single shared file, preventing corrupted or truncated audio when two triggers arrive within one play duration
+- Fix: **macOS OS notifications with backslashes in the message no longer produce malformed AppleScript** — both `\` and `"` are now escaped before interpolation into the `display notification` string
+- Fix: `commandStartAt` is now cleared in `deactivate()` (was cleared per terminal-close but not on extension unload)
+- Fix: `isHookInstalled()` no longer reads and parses `settings.json` from disk on every call — result is cached after first check and invalidated only when hooks are installed or removed
+- Fix: changing `agentConfirmSound.sounds` or `soundMode` directly in settings.json now re-syncs the hook sound file (the `onDidChangeConfiguration` handler was narrowed too aggressively in v0.2.7 and only responded to volume changes)
+- Fix: `onDidEndTerminalShellExecution` now captures a single `Date.now()` timestamp and uses it for both elapsed-time and debounce calculations, eliminating a subtle clock-drift between the two checks
+- Fix: Windows hook command comment clarifies that volume is baked into `STABLE_SOUND_PATH` by `syncHookSound` and `SoundPlayer` has no volume API — removes the dead `volume` read from the Windows branch of `buildHookCommand`
+
 ## [0.2.7] — 2026-07-22
 
 - Fix: **changing notification sound now reliably updates the hook** — `syncHookSound` now receives the exact file path directly from the UI action instead of re-reading config that may not have settled yet; also removed redundant syncs from `onDidChangeConfiguration` that were firing with stale config values between two back-to-back updates

@@ -12,6 +12,7 @@ let lastMatchLabel = '';
 let extensionContext: vscode.ExtensionContext;
 
 let cachedPatterns: RegExp[] | null = null;
+let hookInstalledCache: boolean | undefined;   // cached to avoid repeated disk reads
 const lastTriggerAt   = new Map<vscode.Terminal, number>();
 const commandStartAt  = new Map<vscode.Terminal, number>();
 
@@ -55,7 +56,9 @@ function showOsNotification(message: string) {
   if (!getConfig().get<boolean>('osNotification', true)) { return; }
   const platform = os.platform();
   if (platform === 'win32') {
-    // Balloon tip via System.Windows.Forms — works on all Windows versions
+    // Balloon tip via System.Windows.Forms — works on all Windows versions.
+    // Single-quoted PS strings are literal (no $ or backtick expansion), so
+    // only single-quotes in the message need escaping.
     const msg = message.replace(/'/g, "''");
     const script = [
       `Add-Type -AssemblyName System.Windows.Forms`,
@@ -72,7 +75,9 @@ function showOsNotification(message: string) {
     cp.spawn('powershell', ['-NoProfile', '-NonInteractive', '-STA', '-WindowStyle', 'Hidden', '-Command', script],
       { stdio: 'ignore' }).unref();
   } else if (platform === 'darwin') {
-    cp.spawn('osascript', ['-e', `display notification "${message.replace(/"/g, '\\"')}" with title "Agent Bell"`],
+    // Escape both " and \ — AppleScript string delimiters are " and \ is the only escape char.
+    const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    cp.spawn('osascript', ['-e', `display notification "${escaped}" with title "Agent Bell"`],
       { stdio: 'ignore', detached: true }).unref();
   } else {
     cp.spawn('notify-send', ['Agent Bell', message, '--expire-time=5000'],
@@ -98,16 +103,17 @@ function scaleWavBuffer(buf: Buffer, factor: number): Buffer {
 
 function buildHookCommand(soundFile: string): string {
   const platform = os.platform();
-  const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
-  // Mute check: hook skips playback when the mute flag file exists (extension toggled off)
   const mutePs = MUTE_FLAG_PATH.replace(/\\/g, '\\\\');
 
   if (platform === 'darwin') {
+    const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
     return `test -f "${MUTE_FLAG_PATH}" || afplay -v ${volume} "${soundFile}"`;
   } else if (platform === 'win32') {
+    // Volume is baked into STABLE_SOUND_PATH by syncHookSound; SoundPlayer has no volume API.
     const ps = soundFile.replace(/'/g, "''");
     return `powershell -NoProfile -NonInteractive -Command "if (-not (Test-Path '${mutePs}')) { (New-Object Media.SoundPlayer '${ps}').PlaySync() }"`;
   } else {
+    const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
     const paVol = Math.round(volume * 65536);
     return `test -f "${MUTE_FLAG_PATH}" || (paplay --volume=${paVol} "${soundFile}" 2>/dev/null || aplay "${soundFile}" 2>/dev/null)`;
   }
@@ -126,13 +132,14 @@ function playSound(soundFile: string) {
     args = [soundFile, '-v', String(volume)];
     spawnOpts = { stdio: 'ignore', detached: true };
   } else if (platform === 'win32') {
-    // SoundPlayer has no volume API — scale WAV bytes in memory instead
+    // SoundPlayer has no volume API — scale WAV bytes in memory instead.
+    // Use a unique temp filename per call to avoid races when two triggers fire concurrently.
     let playPath = soundFile;
     if (volume < 0.999 && soundFile.toLowerCase().endsWith('.wav')) {
       try {
         const raw = fs.readFileSync(soundFile);
         const scaled = scaleWavBuffer(raw, volume);
-        const tmp = path.join(os.tmpdir(), 'agent-bell-play.wav');
+        const tmp = path.join(os.tmpdir(), `agent-bell-${Date.now()}.wav`);
         fs.writeFileSync(tmp, scaled);
         playPath = tmp;
       } catch { /* fall back to original file */ }
@@ -194,13 +201,15 @@ type HookGroup = { matcher: string; hooks: Array<{ type: string; command: string
 type HookGroupRead = { hooks?: Array<{ command?: string }> };
 
 function isHookInstalled(): boolean {
+  if (hookInstalledCache !== undefined) { return hookInstalledCache; }
   const settings = readClaudeSettings();
   const hooks = settings['hooks'] as Record<string, unknown> | undefined;
-  if (!hooks) { return false; }
-  return HOOK_CONFIGS.some(({ event }) => {
+  if (!hooks) { hookInstalledCache = false; return false; }
+  hookInstalledCache = HOOK_CONFIGS.some(({ event }) => {
     const groups = hooks[event] as HookGroupRead[] | undefined;
     return groups?.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)));
   });
+  return hookInstalledCache;
 }
 
 // Copy the given sound (or the currently active one) scaled by volume to the stable hook path.
@@ -208,16 +217,22 @@ function isHookInstalled(): boolean {
 // reading config that may not have been committed to disk yet.
 function syncHookSound(context: vscode.ExtensionContext, sourcePath?: string) {
   try {
-    const src = sourcePath ?? pickSoundFile(context);
+    let src = sourcePath ?? pickSoundFile(context);
     if (!fs.existsSync(src)) {
       outputChannel.appendLine(`[hook] syncHookSound skipped — file not found: ${src}`);
       return;
+    }
+    // Windows Media.SoundPlayer only plays uncompressed PCM WAV.
+    // If the active sound is a non-WAV format, fall back to the bundled WAV for the hook.
+    if (os.platform() === 'win32' && !src.toLowerCase().endsWith('.wav')) {
+      outputChannel.appendLine(`[hook] non-WAV source (${path.basename(src)}) — falling back to bundled WAV for hook`);
+      src = path.join(context.extensionPath, 'media', 'notify.wav');
     }
     const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
     const raw = fs.readFileSync(src);
     const out = src.toLowerCase().endsWith('.wav') ? scaleWavBuffer(raw, volume) : raw;
     fs.writeFileSync(STABLE_SOUND_PATH, out);
-    outputChannel.appendLine(`[hook] synced → ${src} at vol ${Math.round(volume * 100)}%`);
+    outputChannel.appendLine(`[hook] synced → ${path.basename(src)} at vol ${Math.round(volume * 100)}%`);
   } catch (e) {
     outputChannel.appendLine(`[hook] syncHookSound failed: ${e}`);
   }
@@ -270,6 +285,7 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
+  hookInstalledCache = true;
   outputChannel.appendLine('[hook] Claude Code Stop + Notification + PreToolUse(Bash) hooks installed.');
   await context.globalState.update('hookDecision', 'installed');
 }
@@ -294,6 +310,7 @@ async function removeClaudeHook(context: vscode.ExtensionContext): Promise<void>
     if (fs.existsSync(STABLE_SOUND_PATH)) { fs.unlinkSync(STABLE_SOUND_PATH); }
   } catch { /* ignore */ }
 
+  hookInstalledCache = false;
   outputChannel.appendLine('[hook] Claude Code hooks removed.');
   await context.globalState.update('hookDecision', 'removed');
 }
@@ -451,10 +468,16 @@ export function activate(context: vscode.ExtensionContext) {
       if (e.affectsConfiguration('agentConfirmSound.enabled')) {
         setWatching(getConfig().get<boolean>('enabled', true));
       }
-      // Volume changes need a re-sync so the hook file gets re-scaled with the new amplitude.
-      // Sounds/soundMode are NOT synced here — chooseSounds and addSound pass the explicit path
-      // directly to syncHookSound to avoid reading config that may not have settled yet.
-      if (e.affectsConfiguration('agentConfirmSound.volume') && isHookInstalled()) {
+      // Re-sync the hook file whenever volume, sounds, or soundMode changes.
+      // onDidChangeConfiguration fires only after the config value is fully committed, so
+      // getConfig().get() here is always up-to-date. chooseSounds/addSound also call
+      // syncHookSound explicitly (with an exact path), making this a safe second pass.
+      if (
+        (e.affectsConfiguration('agentConfirmSound.volume') ||
+         e.affectsConfiguration('agentConfirmSound.sounds') ||
+         e.affectsConfiguration('agentConfirmSound.soundMode')) &&
+        isHookInstalled()
+      ) {
         syncHookSound(context);
         refreshHookCommands();
       }
@@ -472,16 +495,21 @@ export function activate(context: vscode.ExtensionContext) {
       if (!getConfig().get<boolean>('alertOnCommandEnd', true)) { return; }
       if (!terminalPassesNameFilter(event.terminal)) { return; }
 
+      const now = Date.now();
       const started = commandStartAt.get(event.terminal);
       commandStartAt.delete(event.terminal);
       if (started === undefined) { return; }  // command started before extension was active
-      const elapsed = Date.now() - started;
+      const elapsed = now - started;
       const minMs = getConfig().get<number>('commandEndMinDurationMs', 3000);
       if (elapsed < minMs) { return; }
 
+      // If a pattern-match alert already fired during this command's execution, skip — the
+      // user was already notified and firing again would double-alert for the same command.
+      const lastTrigger = lastTriggerAt.get(event.terminal) ?? 0;
+      if (lastTrigger >= started) { return; }
+
       const debounceMs = getConfig().get<number>('debounceMs', 4000);
-      const now = Date.now();
-      if ((lastTriggerAt.get(event.terminal) ?? 0) + debounceMs > now) { return; }
+      if (lastTrigger + debounceMs > now) { return; }
       lastTriggerAt.set(event.terminal, now);
 
       const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -813,6 +841,7 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
 export function deactivate() {
   if (flashTimer) { clearTimeout(flashTimer); }
   lastTriggerAt.clear();
+  commandStartAt.clear();
   // Remove mute flag so hooks work if extension is unloaded/uninstalled
   try { if (fs.existsSync(MUTE_FLAG_PATH)) { fs.unlinkSync(MUTE_FLAG_PATH); } } catch { /* ignore */ }
 }
