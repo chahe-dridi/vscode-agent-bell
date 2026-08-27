@@ -12,9 +12,11 @@ let lastMatchLabel = '';
 let extensionContext: vscode.ExtensionContext;
 
 let cachedPatterns: RegExp[] | null = null;
-let hookInstalledCache: boolean | undefined;   // cached to avoid repeated disk reads
+let tempFileCounter = 0;
+
 const lastTriggerAt   = new Map<vscode.Terminal, number>();
 const commandStartAt  = new Map<vscode.Terminal, number>();
+const terminalExecutionControllers = new Map<vscode.Terminal, AbortController>();
 
 const STABLE_SOUND_PATH = path.join(os.homedir(), '.claude', 'agent-bell-notify.wav');
 const MUTE_FLAG_PATH    = path.join(os.homedir(), '.claude', 'agent-bell-mute');
@@ -56,9 +58,7 @@ function showOsNotification(message: string) {
   if (!getConfig().get<boolean>('osNotification', true)) { return; }
   const platform = os.platform();
   if (platform === 'win32') {
-    // Balloon tip via System.Windows.Forms — works on all Windows versions.
-    // Single-quoted PS strings are literal (no $ or backtick expansion), so
-    // only single-quotes in the message need escaping.
+    // Single-quoted PS strings are literal — only single-quotes in the message need escaping.
     const msg = message.replace(/'/g, "''");
     const script = [
       `Add-Type -AssemblyName System.Windows.Forms`,
@@ -87,9 +87,21 @@ function showOsNotification(message: string) {
 
 // ─── Sound playback ──────────────────────────────────────────────────────────
 
-// Scale 16-bit PCM WAV samples in memory (works for WAV files only).
+// Scale 16-bit PCM WAV samples in-memory.
+// Returns the original buffer unchanged if it is not a standard 16-bit PCM WAV
+// (bad RIFF/WAVE magic, non-PCM format, or non-16-bit depth) or if factor ≈ 1.0.
 function scaleWavBuffer(buf: Buffer, factor: number): Buffer {
   if (factor >= 0.999) { return buf; }
+  // Validate RIFF/WAVE container header
+  if (buf.length < 44) { return buf; }
+  if (buf.toString('ascii', 0, 4) !== 'RIFF') { return buf; }
+  if (buf.toString('ascii', 8, 12) !== 'WAVE') { return buf; }
+  // fmt chunk at offset 12: audio format (offset 20) must be 1 (PCM),
+  // and bits-per-sample (offset 34) must be 16. Other depths (8, 24, 32f) are not scaled.
+  const audioFormat   = buf.readUInt16LE(20);
+  const bitsPerSample = buf.readUInt16LE(34);
+  if (audioFormat !== 1 || bitsPerSample !== 16) { return buf; }
+
   const out = Buffer.from(buf);
   for (let i = 44; i < buf.length - 1; i += 2) {
     const s = buf.readInt16LE(i);
@@ -133,13 +145,13 @@ function playSound(soundFile: string) {
     spawnOpts = { stdio: 'ignore', detached: true };
   } else if (platform === 'win32') {
     // SoundPlayer has no volume API — scale WAV bytes in memory instead.
-    // Use a unique temp filename per call to avoid races when two triggers fire concurrently.
+    // Combine timestamp + monotonic counter so concurrent calls can't share the same temp path.
     let playPath = soundFile;
     if (volume < 0.999 && soundFile.toLowerCase().endsWith('.wav')) {
       try {
         const raw = fs.readFileSync(soundFile);
         const scaled = scaleWavBuffer(raw, volume);
-        const tmp = path.join(os.tmpdir(), `agent-bell-${Date.now()}.wav`);
+        const tmp = path.join(os.tmpdir(), `agent-bell-${Date.now()}-${++tempFileCounter}.wav`);
         fs.writeFileSync(tmp, scaled);
         playPath = tmp;
       } catch { /* fall back to original file */ }
@@ -180,7 +192,7 @@ function readClaudeSettings(): Record<string, unknown> {
       return JSON.parse(fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf8')) as Record<string, unknown>;
     }
   } catch {
-    // corrupt or missing
+    // corrupt or missing — return empty so callers degrade gracefully
   }
   return {};
 }
@@ -190,7 +202,8 @@ function writeClaudeSettings(settings: Record<string, unknown>) {
 }
 
 // Each entry: which Claude Code hook event to register, and what matcher to use.
-// PreToolUse fires right before Claude executes a tool — this is when permission dialogs appear.
+// PreToolUse is kept here so isHookInstalled() and removeClaudeHook() cover existing installs,
+// but installClaudeHook() only adds it when agentConfirmSound.hookPreToolUse is true.
 const HOOK_CONFIGS = [
   { event: 'Stop',        matcher: '' },
   { event: 'Notification', matcher: '' },
@@ -200,16 +213,16 @@ const HOOK_CONFIGS = [
 type HookGroup = { matcher: string; hooks: Array<{ type: string; command: string }> };
 type HookGroupRead = { hooks?: Array<{ command?: string }> };
 
+// Always reads from disk so external edits to settings.json (other Claude Code sessions,
+// manual edits) are reflected immediately without stale cache mismatches.
 function isHookInstalled(): boolean {
-  if (hookInstalledCache !== undefined) { return hookInstalledCache; }
   const settings = readClaudeSettings();
   const hooks = settings['hooks'] as Record<string, unknown> | undefined;
-  if (!hooks) { hookInstalledCache = false; return false; }
-  hookInstalledCache = HOOK_CONFIGS.some(({ event }) => {
+  if (!hooks) { return false; }
+  return HOOK_CONFIGS.some(({ event }) => {
     const groups = hooks[event] as HookGroupRead[] | undefined;
     return groups?.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)));
   });
-  return hookInstalledCache;
 }
 
 // Copy the given sound (or the currently active one) scaled by volume to the stable hook path.
@@ -238,7 +251,7 @@ function syncHookSound(context: vscode.ExtensionContext, sourcePath?: string) {
   }
 }
 
-// Update the command string inside already-installed hooks (e.g. after volume or mute logic change).
+// Update the command string inside already-installed hooks (e.g. after volume or sound change).
 function refreshHookCommands() {
   try {
     const settings = readClaudeSettings();
@@ -274,7 +287,12 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
   const hooks = (settings['hooks'] ?? {}) as Record<string, unknown>;
   const cmd = buildHookCommand(STABLE_SOUND_PATH);
 
+  // PreToolUse fires before every bash command — including auto-approved ones.
+  // Only install it when the user explicitly opts in, to avoid sound spam.
+  const includePreToolUse = getConfig().get<boolean>('hookPreToolUse', false);
+
   for (const { event, matcher } of HOOK_CONFIGS) {
+    if (event === 'PreToolUse' && !includePreToolUse) { continue; }
     const entry: HookGroup = { matcher, hooks: [{ type: 'command', command: cmd }] };
     const existing = (hooks[event] ?? []) as HookGroup[];
     if (!existing.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)))) {
@@ -285,8 +303,8 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
-  hookInstalledCache = true;
-  outputChannel.appendLine('[hook] Claude Code Stop + Notification + PreToolUse(Bash) hooks installed.');
+  const hookList = `Stop + Notification${includePreToolUse ? ' + PreToolUse(Bash)' : ''}`;
+  outputChannel.appendLine(`[hook] Claude Code ${hookList} hooks installed.`);
   await context.globalState.update('hookDecision', 'installed');
 }
 
@@ -310,7 +328,6 @@ async function removeClaudeHook(context: vscode.ExtensionContext): Promise<void>
     if (fs.existsSync(STABLE_SOUND_PATH)) { fs.unlinkSync(STABLE_SOUND_PATH); }
   } catch { /* ignore */ }
 
-  hookInstalledCache = false;
   outputChannel.appendLine('[hook] Claude Code hooks removed.');
   await context.globalState.update('hookDecision', 'removed');
 }
@@ -412,12 +429,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   setWatching(getConfig().get<boolean>('enabled', true));
 
-  // Migrate existing hooks to the latest command format (adds mute-flag check).
+  // Migrate existing hooks to the latest command format on startup.
   if (isHookInstalled()) {
     refreshHookCommands();
   }
 
-  // Only show the setup modal if the user hasn't made a decision yet
+  // Only show the setup modal if the user hasn't made a decision yet.
   const hookDecision = context.globalState.get<string>('hookDecision');
   if (!hookDecision && !isHookInstalled()) {
     vscode.window.showInformationMessage(
@@ -434,7 +451,6 @@ export function activate(context: vscode.ExtensionContext) {
         '',
         '• Stop hook        → plays when Claude finishes its turn',
         '• Notification hook → plays when Claude sends a background notification',
-        '• PreToolUse hook  → plays when Claude is about to run a Bash command',
         '',
         'Nothing is sent externally. Fully reversible via:',
         '"Agent Bell: Remove Claude Code Integration"',
@@ -453,7 +469,7 @@ export function activate(context: vscode.ExtensionContext) {
       } else if (choice === 'Not now') {
         await context.globalState.update('hookDecision', 'declined');
       }
-      // If dismissed (undefined), don't record a decision so we ask again next time
+      // If dismissed (undefined), don't record a decision so we ask again next time.
     });
   }
 
@@ -469,9 +485,6 @@ export function activate(context: vscode.ExtensionContext) {
         setWatching(getConfig().get<boolean>('enabled', true));
       }
       // Re-sync the hook file whenever volume, sounds, or soundMode changes.
-      // onDidChangeConfiguration fires only after the config value is fully committed, so
-      // getConfig().get() here is always up-to-date. chooseSounds/addSound also call
-      // syncHookSound explicitly (with an exact path), making this a safe second pass.
       if (
         (e.affectsConfiguration('agentConfirmSound.volume') ||
          e.affectsConfiguration('agentConfirmSound.sounds') ||
@@ -485,10 +498,26 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.onDidCloseTerminal((terminal) => {
       lastTriggerAt.delete(terminal);
       commandStartAt.delete(terminal);
+      // Abort the watchExecution loop so the async iterator does not linger.
+      const ac = terminalExecutionControllers.get(terminal);
+      if (ac) {
+        ac.abort();
+        terminalExecutionControllers.delete(terminal);
+      }
     }),
     vscode.window.onDidStartTerminalShellExecution((event) => {
       commandStartAt.set(event.terminal, Date.now());
-      watchExecution(context, event.terminal, event.execution);
+
+      // Only stream output for terminals that could produce alerts.
+      // Skipping filtered-out and pattern-free cases avoids reading their entire output.
+      if (getPatterns().length > 0 && terminalPassesNameFilter(event.terminal)) {
+        // Abort the previous watcher for this terminal (e.g. rapid command re-runs).
+        const prev = terminalExecutionControllers.get(event.terminal);
+        if (prev) { prev.abort(); }
+        const ac = new AbortController();
+        terminalExecutionControllers.set(event.terminal, ac);
+        watchExecution(context, event.terminal, event.execution, ac.signal);
+      }
     }),
     vscode.window.onDidEndTerminalShellExecution((event) => {
       if (!watching) { return; }
@@ -503,8 +532,8 @@ export function activate(context: vscode.ExtensionContext) {
       const minMs = getConfig().get<number>('commandEndMinDurationMs', 3000);
       if (elapsed < minMs) { return; }
 
-      // If a pattern-match alert already fired during this command's execution, skip — the
-      // user was already notified and firing again would double-alert for the same command.
+      // If a pattern-match alert already fired during this command, skip — the
+      // user was already notified; double-alerting for the same command would be noise.
       const lastTrigger = lastTriggerAt.get(event.terminal) ?? 0;
       if (lastTrigger >= started) { return; }
 
@@ -529,7 +558,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
     vscode.commands.registerCommand('agentConfirmSound.toggle', () => {
-      // Clear any active flash before toggling so the state change is immediate
+      // Clear any active flash before toggling so the state change is immediate.
       if (flashTimer) {
         clearTimeout(flashTimer);
         flashTimer = undefined;
@@ -560,17 +589,14 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      // Add to list
       const updated = [...current, ...added];
       await getConfig().update('sounds', updated, vscode.ConfigurationTarget.Global);
 
-      // Ask if they want to activate the first added sound
       const activate = await vscode.window.showInformationMessage(
         `Added: ${added.map((p) => path.basename(p)).join(', ')}`,
         'Use this sound now', 'Keep current'
       );
       if (activate === 'Use this sound now') {
-        // Move new sound to front, switch to fixed mode
         const withNew = [added[0], ...updated.filter((s) => s !== added[0])];
         await getConfig().update('sounds', withNew, vscode.ConfigurationTarget.Global);
         await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
@@ -579,7 +605,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
     vscode.commands.registerCommand('agentConfirmSound.chooseSounds', async () => {
-      // Loop so the menu re-opens after each action (shows updated state)
       while (true) {
         const sounds = getConfig().get<string[]>('sounds', []);
         const mode = getConfig().get<string>('soundMode', 'fixed');
@@ -589,7 +614,6 @@ export function activate(context: vscode.ExtensionContext) {
 
         const items: vscode.QuickPickItem[] = [];
 
-        // ── Sounds ──────────────────────────────────────────────────────────
         items.push({
           label: isBundledActive ? '$(check) Bundled  (default)' : '$(file-media) Bundled  (default)',
           description: 'notify.wav included with Agent Bell',
@@ -605,7 +629,6 @@ export function activate(context: vscode.ExtensionContext) {
           });
         }
 
-        // ── Actions ──────────────────────────────────────────────────────────
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
         items.push({
           label: '$(add) Add sound file…',
@@ -614,9 +637,7 @@ export function activate(context: vscode.ExtensionContext) {
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
         items.push({
           label: `$(unmute) Volume: ${Math.round(volume * 100)}%`,
-          description: os.platform() === 'win32'
-            ? 'Works on macOS / Linux — Windows uses system volume'
-            : 'Click to change',
+          description: 'Click to change (applied via sample scaling on Windows, afplay/paplay on other platforms)',
         });
         items.push({
           label: isRandom ? '$(check) Random mode: On' : '$(circle-slash) Random mode: Off',
@@ -632,13 +653,11 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (!pick) { return; }
 
-        // ── Add sound ────────────────────────────────────────────────────────
         if (pick.label.includes('Add sound file')) {
           await vscode.commands.executeCommand('agentConfirmSound.addSound');
           continue;
         }
 
-        // ── Volume ───────────────────────────────────────────────────────────
         if (pick.label.includes('Volume:')) {
           const volPick = await vscode.window.showQuickPick(
             [
@@ -668,7 +687,6 @@ export function activate(context: vscode.ExtensionContext) {
           continue;
         }
 
-        // ── Random mode toggle ────────────────────────────────────────────────
         if (pick.label.includes('Random mode')) {
           const newMode = isRandom ? 'fixed' : 'random';
           await getConfig().update('soundMode', newMode, vscode.ConfigurationTarget.Global);
@@ -680,12 +698,10 @@ export function activate(context: vscode.ExtensionContext) {
           continue;
         }
 
-        // ── Sound clicked ─────────────────────────────────────────────────────
         const isBundled = pick.description === 'notify.wav included with Agent Bell';
 
         if (isBundled) {
           if (!isBundledActive) {
-            // Switch to bundled: clear the list
             await getConfig().update('sounds', [], vscode.ConfigurationTarget.Global);
             await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
             if (isHookInstalled()) {
@@ -696,12 +712,10 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
 
-        // Custom sound
         const soundPath = pick.description!;
         const isActive = !isRandom && sounds[0] === soundPath;
 
         if (isActive) {
-          // Active sound: offer preview or remove
           const action = await vscode.window.showQuickPick(
             [
               { label: '$(play) Preview', description: path.basename(soundPath) },
@@ -718,7 +732,6 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage(`Agent Bell: removed ${path.basename(soundPath)}.`);
           }
         } else {
-          // Inactive sound: make it active (move to front)
           const reordered = [soundPath, ...sounds.filter((s) => s !== soundPath)];
           await getConfig().update('sounds', reordered, vscode.ConfigurationTarget.Global);
           await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
@@ -782,51 +795,49 @@ export function activate(context: vscode.ExtensionContext) {
 async function watchExecution(
   context: vscode.ExtensionContext,
   terminal: vscode.Terminal,
-  execution: vscode.TerminalShellExecution
+  execution: vscode.TerminalShellExecution,
+  signal: AbortSignal
 ) {
   try {
     for await (const chunk of execution.read()) {
+      if (signal.aborted) { break; }
       maybeTrigger(context, terminal, chunk);
     }
   } catch (e) {
-    outputChannel.appendLine(`[error] stream read failed: ${e}`);
+    if (!signal.aborted) {
+      outputChannel.appendLine(`[error] stream read failed: ${e}`);
+    }
   }
 }
 
 function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Terminal, chunk: string) {
-  if (!watching) {
-    return;
-  }
-  if (!terminalPassesNameFilter(terminal)) {
-    return;
-  }
+  if (!watching) { return; }
   const patterns = getPatterns();
-  if (!patterns.length) {
-    return;
-  }
+  if (!patterns.length) { return; }
+
+  // Read config once for the full evaluation of this chunk.
+  const config = getConfig();
+
+  if (!terminalPassesNameFilter(terminal)) { return; }
 
   const clean = stripAnsi(chunk);
 
-  if (getConfig().get<boolean>('debugLog', false)) {
+  if (config.get<boolean>('debugLog', false)) {
     outputChannel.appendLine(`[debug] terminal="${terminal.name}" chunk=${JSON.stringify(clean.slice(0, 200))}`);
   }
 
   const matched = patterns.find((re) => re.test(clean));
-  if (!matched) {
-    return;
-  }
+  if (!matched) { return; }
 
-  const debounceMs = getConfig().get<number>('debounceMs', 4000);
+  const debounceMs = config.get<number>('debounceMs', 4000);
   const now = Date.now();
-  if ((lastTriggerAt.get(terminal) ?? 0) + debounceMs > now) {
-    return;
-  }
+  if ((lastTriggerAt.get(terminal) ?? 0) + debounceMs > now) { return; }
   lastTriggerAt.set(terminal, now);
 
   const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   outputChannel.appendLine(`[match] "${terminal.name}" matched ${matched} at ${new Date(now).toISOString()}`);
 
-  if (getConfig().get<boolean>('focusTerminal', false)) {
+  if (config.get<boolean>('focusTerminal', false)) {
     terminal.show(true);
   }
 
@@ -842,6 +853,9 @@ export function deactivate() {
   if (flashTimer) { clearTimeout(flashTimer); }
   lastTriggerAt.clear();
   commandStartAt.clear();
-  // Remove mute flag so hooks work if extension is unloaded/uninstalled
+  // Abort all pending execution watchers so async iterators don't linger after unload.
+  for (const ac of terminalExecutionControllers.values()) { ac.abort(); }
+  terminalExecutionControllers.clear();
+  // Remove mute flag so hooks work if extension is unloaded/uninstalled.
   try { if (fs.existsSync(MUTE_FLAG_PATH)) { fs.unlinkSync(MUTE_FLAG_PATH); } } catch { /* ignore */ }
 }
