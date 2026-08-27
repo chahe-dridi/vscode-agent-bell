@@ -27,9 +27,11 @@ On first install, Agent Bell offers to set up a direct integration with Claude C
    - **`Stop`** — plays when Claude finishes its turn and is waiting for your next message
    - **`Notification`** — plays when Claude Code sends a background notification (e.g. when the window is not focused)
 
-> **Note on permission dialogs:** Claude Code's permission prompts ("Allow bash command?") are part of the interactive UI and do not fire a hook event. The Stop hook covers the most common case — Claude finishing its turn.
+These hooks fire directly from Claude Code's process — they work even if VS Code is not in focus.
 
-> **Privacy note:** Agent Bell only writes to your local `~/.claude/settings.json`. No data is read, collected, or sent anywhere. You can review or remove the hooks at any time via the commands below.
+> **PreToolUse (bash approval) hook:** If you run Claude Code with manual bash approval (`requiresApproval`), you can enable an additional hook that plays before each bash approval prompt. Set `agentConfirmSound.hookPreToolUse: true` and reinstall the integration. Leave this off if bash is auto-approved — it would fire on every command.
+
+> **Privacy note:** Agent Bell only writes to your local `~/.claude/settings.json`. No data is read, collected, or sent anywhere.
 
 If you skip the prompt, you can set it up later:
 
@@ -67,12 +69,13 @@ Other terminal agents (aider, scripts, etc.)
 
 - Claude Code hook integration — works even without shell integration
 - Sound alert on any configurable regex pattern in terminal output
+- Alert when any long-running command finishes (configurable minimum duration)
 - Status bar indicator — flashes on alert, click to pause/resume
+- OS-level notification when VS Code is not focused (Windows balloon tip, macOS notification, Linux notify-send)
 - Multi-sound support — add your own files and use random or fixed mode
-- Auto-focus the matching terminal when an alert fires (optional)
-- Volume control (macOS and Linux)
+- Volume control on all platforms (macOS via afplay, Linux via paplay, Windows via WAV sample scaling)
 - Terminal name filter — watch only terminals named "claude" or "aider"
-- Per-terminal debounce — one alert per prompt
+- Per-terminal debounce — one alert per prompt, no spam
 - Debug log mode — see exactly what text reaches the extension
 - Pattern tester — paste terminal output and see which pattern matches
 - Cross-platform — macOS, Windows, Linux
@@ -103,12 +106,15 @@ Open Settings and search **"Agent Bell"**, or edit `settings.json`:
 | `agentConfirmSound.enabled` | `true` | Turn terminal watching on/off. |
 | `agentConfirmSound.patterns` | *(see below)* | Case-insensitive regex array matched against terminal output. |
 | `agentConfirmSound.terminalNameFilter` | `[]` | Only watch terminals whose name contains one of these strings. Empty = watch all. |
-| `agentConfirmSound.soundPath` | `""` | Absolute path to a custom sound file. Empty = bundled sound. |
 | `agentConfirmSound.sounds` | `[]` | List of sound files for multi-sound mode. Empty = bundled sound. |
 | `agentConfirmSound.soundMode` | `"fixed"` | `"fixed"` plays the first sound in the list. `"random"` picks one at random each time. |
 | `agentConfirmSound.debounceMs` | `4000` | Minimum ms between alerts per terminal. |
-| `agentConfirmSound.volume` | `1` | Volume 0–1 (macOS / Linux only). |
+| `agentConfirmSound.volume` | `1` | Volume 0–1. Applied via afplay (macOS), paplay (Linux), and WAV sample scaling (Windows). |
 | `agentConfirmSound.focusTerminal` | `false` | Auto-focus the matching terminal when an alert fires. |
+| `agentConfirmSound.alertOnCommandEnd` | `true` | Play a sound when any terminal command finishes (respects `commandEndMinDurationMs`). |
+| `agentConfirmSound.commandEndMinDurationMs` | `3000` | Minimum command duration before the "command finished" alert fires. Quick commands like `ls` are ignored. |
+| `agentConfirmSound.osNotification` | `true` | Show an OS-level notification when an alert fires and VS Code is not focused. |
+| `agentConfirmSound.hookPreToolUse` | `false` | Also install a PreToolUse(Bash) hook. Only useful if you run Claude Code with manual bash approval. |
 | `agentConfirmSound.debugLog` | `false` | Log every terminal chunk to the output channel. Use this to tune patterns. Disable when done. |
 
 ### Multi-sound setup
@@ -130,25 +136,32 @@ Or use **Agent Bell: Manage Sounds** from the Command Palette for a UI.
 ```json
 "agentConfirmSound.patterns": [
   "\\(y\\s*/\\s*n\\)",
+  "\\[y\\s*/\\s*n\\]",
+  "\\(Y\\s*/\\s*n\\)",
   "\\[Y\\s*/\\s*n\\]",
   "do you want to proceed",
   "do you want to continue",
   "allow this (action|command|tool)",
-  "allow (read|write|execute|bash|edit|create|delete|tool)",
   "would you like to proceed",
   "press enter to confirm",
   "confirm\\?\\s*$",
   "proceed\\?\\s*$",
+  "continue\\?\\s*$",
   "\\(yes/no\\)",
   "type ['\"]?yes['\"]? to continue",
+  "allow (read|write|execute|bash|edit|create|delete|tool)",
   "do you want claude",
-  "approve|reject.*action",
   "waiting for (your )?input",
-  "tool (call|use|request)",
-  "run this command",
-  "execute.*\\?"
+  "execute.*\\?",
+  "overwrite.*\\?",
+  "enter (your )?choice"
 ]
 ```
+
+Patterns that were removed because they matched normal informational output:
+- `"approve|reject.*action"` — the bare word `approve` matched too broadly
+- `"tool (call|use|request)"` — fired on Claude Code's own log lines
+- `"run this command"` — fired on "I'll run this command: …" narration
 
 ### Watch only Claude Code terminals
 
@@ -156,10 +169,10 @@ Or use **Agent Bell: Manage Sounds** from the Command Palette for a UI.
 "agentConfirmSound.terminalNameFilter": ["claude"]
 ```
 
-### Custom sound and lower volume
+### Custom sound at lower volume
 
 ```json
-"agentConfirmSound.soundPath": "/Users/you/sounds/ping.wav",
+"agentConfirmSound.sounds": ["/Users/you/sounds/ping.wav"],
 "agentConfirmSound.volume": 0.5
 ```
 
@@ -182,8 +195,8 @@ Every agent phrases prompts differently. To find what text your agent actually o
 ## Limitations
 
 - Terminal watching requires shell integration. Full-screen TUI apps that repaint the screen (like Claude Code CLI in interactive mode) may not expose clean text through the shell integration API — use the Claude Code hook integration instead.
-- Claude Code permission dialogs ("Allow bash command?") do not trigger a hookable event — only the `Stop` event (turn complete) and `Notification` event (background notification) are available.
-- Windows volume control is not supported — `Media.SoundPlayer` has no volume API. Use a pre-normalised custom sound file instead.
+- Claude Code's `PreToolUse` hook fires before every bash command, not just approval prompts. If bash is auto-approved, enabling `hookPreToolUse` will trigger a sound on every command.
+- Volume scaling only applies to uncompressed 16-bit PCM WAV files. MP3 and other formats play at their encoded volume.
 - The Claude Code hook integration requires Claude Code to be installed (`~/.claude/` must exist).
 
 ---
