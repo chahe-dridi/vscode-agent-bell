@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Agent Bell",
   "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.2.8",
+  "version": "0.3.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -95,28 +95,23 @@
             "press enter to confirm",
             "confirm\\?\\s*$",
             "proceed\\?\\s*$",
+            "continue\\?\\s*$",
             "\\(yes/no\\)",
             "type ['\"]?yes['\"]? to continue",
             "allow (read|write|execute|bash|edit|create|delete|tool)",
             "do you want claude",
-            "approve|reject.*action",
             "waiting for (your )?input",
-            "tool (call|use|request)",
-            "run this command",
-            "execute.*\\?"
+            "execute.*\\?",
+            "overwrite.*\\?",
+            "enter (your )?choice"
           ],
-          "description": "Case-insensitive regex patterns matched against terminal output. A sound plays on the first match (then debounces). Tune these for the agents you use — check the output channel to see what's actually coming through."
+          "description": "Case-insensitive regex patterns matched against terminal output. A sound plays on the first match (then debounces). Tune these for the agents you use — check the output channel to see what's actually coming through. Tip: enable debugLog to inspect raw terminal chunks."
         },
         "agentConfirmSound.terminalNameFilter": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
           "description": "Optional. If non-empty, only terminals whose name contains one of these strings (case-insensitive) are watched. Leave empty to watch all terminals. Example: [\"claude\", \"aider\"]"
-        },
-        "agentConfirmSound.soundPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional absolute path to a custom sound file (.wav / .mp3 / .aiff). Leave empty to use the bundled default sound."
         },
         "agentConfirmSound.debounceMs": {
           "type": "number",
@@ -149,6 +144,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show an OS-level notification (Windows balloon tip / macOS notification center / Linux notify-send) when an alert fires and VS Code is not in focus. Lets you know something needs attention even when you're on another screen."
+        },
+        "agentConfirmSound.hookPreToolUse": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also install a PreToolUse(Bash) Claude Code hook that fires before every bash command. Useful if you run Claude with manual bash approval (requiresApproval). Leave off if bash is auto-approved — every command would trigger a sound."
         },
         "agentConfirmSound.debugLog": {
           "type": "boolean",
