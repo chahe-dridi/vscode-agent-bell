@@ -30,6 +30,7 @@ const alertHistory: AlertRecord[] = [];
 function addAlert(record: AlertRecord) {
   alertHistory.unshift(record);
   if (alertHistory.length > MAX_HISTORY) { alertHistory.length = MAX_HISTORY; }
+  updateStatusBar();
 }
 
 // ─── Reminder escalation ──────────────────────────────────────────────────────
@@ -497,18 +498,19 @@ function updateStatusBar() {
   if (flashTimer) {
     return;
   }
-  if (watching) {
-    statusBarItem.text = lastMatchLabel
-      ? `$(bell) Notification Bell  ·  last alert ${lastMatchLabel}`
-      : '$(bell) Notification Bell: On';
-    statusBarItem.color = undefined;
-    statusBarItem.backgroundColor = undefined;
-    statusBarItem.tooltip = 'Notification Bell is watching terminals. Click to pause.';
-  } else {
-    statusBarItem.text = '$(bell-slash) Notification Bell: Off';
+  const count = alertHistory.length;
+  if (!watching) {
+    statusBarItem.text = '🔕';
     statusBarItem.color = undefined;
     statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    statusBarItem.tooltip = 'Notification Bell is paused. Click to resume watching.';
+    statusBarItem.tooltip = 'Notification Bell — paused (click to resume)';
+  } else {
+    statusBarItem.text = count > 99 ? '🔔 99+' : count > 0 ? `🔔 ${count}` : '🔔';
+    statusBarItem.color = undefined;
+    statusBarItem.backgroundColor = undefined;
+    statusBarItem.tooltip = count > 0
+      ? `Notification Bell — ${count} alert${count === 1 ? '' : 's'} this session`
+      : 'Notification Bell — watching (click to pause)';
   }
   statusBarItem.show();
 }
@@ -947,6 +949,7 @@ export function activate(context: vscode.ExtensionContext) {
       }).then((pick) => {
         if (pick?.label.includes('Clear history')) {
           alertHistory.length = 0;
+          updateStatusBar();
           vscode.window.showInformationMessage('Notification Bell: history cleared.');
         }
       });
