@@ -209,11 +209,18 @@ Every agent phrases prompts differently. To find what text your agent actually o
 
 [github.com/chahe-dridi/vscode-agent-bell](https://github.com/chahe-dridi/vscode-agent-bell)
 
-Issues and pull requests welcome.
+PRs and issues welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+
+**Branch strategy:** open PRs against `dev`, not `master`. `master` is the stable marketplace branch.
+
+Look for [`good first issue`](https://github.com/chahe-dridi/vscode-agent-bell/issues?q=is%3Aopen+label%3A%22good+first+issue%22) labels if it's your first contribution.
 
 ### Local development
 
 ```bash
+git clone https://github.com/chahe-dridi/vscode-agent-bell.git
+cd vscode-agent-bell
+git checkout dev
 npm install
 npm run compile
 # Press F5 in VS Code to launch the Extension Development Host
@@ -223,5 +230,5 @@ To package and install locally:
 
 ```bash
 npm run package
-code --install-extension dist/agent-confirm-sound-<version>.vsix
+code --install-extension dist/agent-confirm-sound-<version>.vsix --force
 ```
