@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notifications when AI agents (Claude Code, aider, Cursor CLI) need your input or terminal commands finish. Status bar flash, reminder escalation, and Claude Code hook integration.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -109,7 +109,10 @@
             "waiting for (your )?input",
             "execute.*\\?",
             "overwrite.*\\?",
-            "enter (your )?choice"
+            "enter (your )?choice",
+            "are you sure\\?",
+            "\\[A\\]llow",
+            "press any key"
           ],
           "description": "Case-insensitive regex patterns matched against terminal output. A sound plays on the first match (then debounces). Tune these for the agents you use — check the output channel to see what's actually coming through. Tip: enable debugLog to inspect raw terminal chunks."
         },
@@ -129,7 +132,7 @@
           "default": 1,
           "minimum": 0,
           "maximum": 1,
-          "description": "Volume level from 0 (silent) to 1 (full). Applied via afplay on macOS and paplay on Linux. Windows SoundPlayer does not support volume control."
+          "description": "Volume level from 0 (silent) to 1 (full). Applied via afplay (macOS), paplay (Linux), and WAV sample scaling (Windows). Only uncompressed 16-bit PCM WAV files support scaling — MP3 and other formats play at their encoded volume."
         },
         "agentConfirmSound.focusTerminal": {
           "type": "boolean",
