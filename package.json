@@ -70,6 +70,10 @@
       {
         "command": "agentConfirmSound.chooseSounds",
         "title": "Agent Bell: Manage Sounds"
+      },
+      {
+        "command": "agentConfirmSound.showHistory",
+        "title": "Agent Bell: Show Alert History"
       }
     ],
     "configuration": {
@@ -149,6 +153,17 @@
           "type": "boolean",
           "default": false,
           "description": "Also install a PreToolUse(Bash) Claude Code hook that fires before every bash command. Useful if you run Claude with manual bash approval (requiresApproval). Leave off if bash is auto-approved — every command would trigger a sound."
+        },
+        "agentConfirmSound.reminderIntervalMs": {
+          "type": "number",
+          "default": 0,
+          "description": "If non-zero, re-alert after this many milliseconds if the agent is still waiting. 0 = disabled. Example: 120000 for a 2-minute reminder. Cancelled automatically when you run a new command in the waiting terminal."
+        },
+        "agentConfirmSound.reminderMaxCount": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "Maximum number of reminders to fire before stopping. Only applies when reminderIntervalMs > 0."
         },
         "agentConfirmSound.debugLog": {
           "type": "boolean",

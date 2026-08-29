@@ -16,6 +16,59 @@ let tempFileCounter = 0;
 let hookSignalWatcher: fs.FSWatcher | undefined;
 let lastHookSignalTs = 0;
 
+// ─── Alert history ────────────────────────────────────────────────────────────
+
+interface AlertRecord {
+  ts: number;
+  source: string;
+  type: 'hook' | 'pattern' | 'command-end';
+  detail: string;
+}
+const MAX_HISTORY = 50;
+const alertHistory: AlertRecord[] = [];
+
+function addAlert(record: AlertRecord) {
+  alertHistory.unshift(record);
+  if (alertHistory.length > MAX_HISTORY) { alertHistory.length = MAX_HISTORY; }
+}
+
+// ─── Reminder escalation ──────────────────────────────────────────────────────
+
+let reminderTimer: ReturnType<typeof setTimeout> | undefined;
+let reminderCount = 0;
+let reminderSource = '';
+let reminderTerminal: vscode.Terminal | undefined;
+
+function scheduleReminder(source: string, terminal?: vscode.Terminal) {
+  clearReminder();
+  const intervalMs = getConfig().get<number>('reminderIntervalMs', 0);
+  const maxCount   = getConfig().get<number>('reminderMaxCount', 3);
+  if (intervalMs <= 0 || maxCount <= 0) { return; }
+  reminderSource   = source;
+  reminderTerminal = terminal;
+  reminderCount    = 0;
+
+  function fire() {
+    reminderCount++;
+    outputChannel.appendLine(`[reminder] #${reminderCount}/${maxCount} — ${reminderSource}`);
+    const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    flashStatusBar(timeLabel);
+    triggerSound(extensionContext);
+    if (!vscode.window.state.focused) {
+      showOsNotification(`Still waiting: ${reminderSource}`);
+    }
+    reminderTimer = reminderCount < maxCount ? setTimeout(fire, intervalMs) : undefined;
+  }
+  reminderTimer = setTimeout(fire, intervalMs);
+}
+
+function clearReminder() {
+  if (reminderTimer) { clearTimeout(reminderTimer); reminderTimer = undefined; }
+  reminderSource   = '';
+  reminderTerminal = undefined;
+  reminderCount    = 0;
+}
+
 const lastTriggerAt   = new Map<vscode.Terminal, number>();
 const commandStartAt  = new Map<vscode.Terminal, number>();
 const terminalExecutionControllers = new Map<vscode.Terminal, AbortController>();
@@ -279,11 +332,13 @@ function handleHookSignal() {
     const now = Date.now();
     const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     outputChannel.appendLine(`[hook] signal: ${event} at ${timeLabel}`);
+    addAlert({ ts: now, source: 'Claude Code', type: 'hook', detail: event });
     if (watching) {
       flashStatusBar(timeLabel);
       if (!vscode.window.state.focused) {
         showOsNotification(HOOK_EVENT_LABELS[event] ?? 'Claude Code needs your attention');
       }
+      scheduleReminder(HOOK_EVENT_LABELS[event] ?? 'Claude Code');
     }
   } catch {
     // file may not exist yet or be mid-write — ignore
@@ -490,6 +545,7 @@ function setWatching(value: boolean) {
   watching = value;
   updateStatusBar();
   setMuteFlag(!value);
+  if (!value) { clearReminder(); }
   outputChannel.appendLine(value ? '[info] watching started.' : '[info] watching paused.');
 }
 
@@ -587,6 +643,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.window.onDidStartTerminalShellExecution((event) => {
       commandStartAt.set(event.terminal, Date.now());
 
+      // If the user ran a new command in the terminal that triggered the active reminder,
+      // they have responded — cancel the reminder so it doesn't keep re-alerting.
+      if (reminderTerminal === event.terminal) { clearReminder(); }
+
       // Only stream output for terminals that could produce alerts.
       // Skipping filtered-out and pattern-free cases avoids reading their entire output.
       if (getPatterns().length > 0 && terminalPassesNameFilter(event.terminal)) {
@@ -622,7 +682,9 @@ export function activate(context: vscode.ExtensionContext) {
 
       const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const exit = event.exitCode;
-      outputChannel.appendLine(`[done] "${event.terminal.name}" finished in ${Math.round(elapsed / 1000)}s (exit ${exit ?? '?'})`);
+      const elapsedStr = `finished in ${Math.round(elapsed / 1000)}s`;
+      outputChannel.appendLine(`[done] "${event.terminal.name}" ${elapsedStr} (exit ${exit ?? '?'})`);
+      addAlert({ ts: now, source: event.terminal.name, type: 'command-end', detail: elapsedStr });
 
       if (getConfig().get<boolean>('focusTerminal', false)) { event.terminal.show(true); }
 
@@ -845,6 +907,30 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(`Agent Bell: failed to remove hook — ${e}`);
       }
     }),
+    vscode.commands.registerCommand('agentConfirmSound.showHistory', () => {
+      if (alertHistory.length === 0) {
+        vscode.window.showInformationMessage('Agent Bell: no alerts recorded yet in this session.');
+        return;
+      }
+      const items: vscode.QuickPickItem[] = alertHistory.map((r) => {
+        const time = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const icon = r.type === 'hook' ? '$(cloud)' : r.type === 'command-end' ? '$(check)' : '$(bell)';
+        return { label: `${icon}  ${time}`, description: r.source, detail: r.detail };
+      });
+      items.push(
+        { label: '', kind: vscode.QuickPickItemKind.Separator },
+        { label: '$(trash) Clear history', description: `${alertHistory.length} alerts` }
+      );
+      vscode.window.showQuickPick(items, {
+        title: `Agent Bell — Alert History  (${alertHistory.length})`,
+        placeHolder: 'Recent alerts — read-only. Select "Clear history" to reset.',
+      }).then((pick) => {
+        if (pick?.label.includes('Clear history')) {
+          alertHistory.length = 0;
+          vscode.window.showInformationMessage('Agent Bell: history cleared.');
+        }
+      });
+    }),
     vscode.commands.registerCommand('agentConfirmSound.testPattern', async () => {
       const input = await vscode.window.showInputBox({
         prompt: 'Paste a line of terminal output to test against your patterns',
@@ -916,6 +1002,7 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
 
   const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   outputChannel.appendLine(`[match] "${terminal.name}" matched ${matched} at ${new Date(now).toISOString()}`);
+  addAlert({ ts: now, source: terminal.name, type: 'pattern', detail: matched.source });
 
   if (config.get<boolean>('focusTerminal', false)) {
     terminal.show(true);
@@ -927,6 +1014,8 @@ function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Termina
   if (!vscode.window.state.focused) {
     showOsNotification(`"${terminal.name}" needs your attention`);
   }
+
+  scheduleReminder(`"${terminal.name}"`, terminal);
 }
 
 export function deactivate() {
@@ -936,6 +1025,7 @@ export function deactivate() {
   // Abort all pending execution watchers so async iterators don't linger after unload.
   for (const ac of terminalExecutionControllers.values()) { ac.abort(); }
   terminalExecutionControllers.clear();
+  clearReminder();
   teardownHookSignalWatcher();
   // Remove mute flag so hooks work if extension is unloaded/uninstalled.
   try { if (fs.existsSync(MUTE_FLAG_PATH)) { fs.unlinkSync(MUTE_FLAG_PATH); } } catch { /* ignore */ }
