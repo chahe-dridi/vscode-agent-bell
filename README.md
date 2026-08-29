@@ -218,6 +218,14 @@ Every agent phrases prompts differently. To find what text your agent actually o
 
 ---
 
+## Support the project
+
+If Notification Bell saves you from missing a prompt, consider giving it a ⭐ on GitHub — it helps others find it and motivates continued development.
+
+**[⭐ Star on GitHub](https://github.com/chahe-dridi/vscode-agent-bell)**
+
+---
+
 ## Contributing
 
 [github.com/chahe-dridi/vscode-agent-bell](https://github.com/chahe-dridi/vscode-agent-bell)
