@@ -973,6 +973,42 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.show();
         vscode.window.showWarningMessage('Notification Bell: no pattern matched. Check the log and adjust your patterns.');
       }
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.resetDefaults', async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        'Reset all Notification Bell settings to defaults?',
+        {
+          modal: true,
+          detail: 'This will reset all Notification Bell settings to their defaults. Continue?',
+        },
+        'Reset'
+      );
+      if (confirm !== 'Reset') {
+        return;
+      }
+
+      const config = vscode.workspace.getConfiguration();
+      const keys = [
+        'agentConfirmSound.enabled',
+        'agentConfirmSound.patterns',
+        'agentConfirmSound.terminalNameFilter',
+        'agentConfirmSound.debounceMs',
+        'agentConfirmSound.volume',
+        'agentConfirmSound.sounds',
+        'agentConfirmSound.soundMode',
+        'agentConfirmSound.focusTerminal',
+        'agentConfirmSound.alertOnCommandEnd',
+        'agentConfirmSound.commandEndMinDurationMs',
+        'agentConfirmSound.osNotification',
+        'agentConfirmSound.hookPreToolUse',
+        'agentConfirmSound.reminderIntervalMs',
+        'agentConfirmSound.reminderMaxCount',
+        'agentConfirmSound.debugLog',
+      ];
+      for (const key of keys) {
+        await config.update(key, undefined, vscode.ConfigurationTarget.Global);
+      }
+      vscode.window.showInformationMessage('Notification Bell: settings reset to defaults.');
     })
   );
 
