@@ -96,6 +96,7 @@ Other terminal agents (aider, scripts, etc.)
 | `Notification Bell: Manage Sounds` | Switch between bundled sounds (notify.wav / notification-bell.mp3), add custom files, toggle random mode. |
 | `Notification Bell: Add Sound File` | Browse and add a sound file (.wav / .mp3 / .aiff). |
 | `Notification Bell: Show Alert History` | View the last 50 alerts this session (time, source, what triggered). |
+| `Notification Bell: Reset to Defaults` | Reset all Notification Bell settings to defaults. |
 
 ---
 
