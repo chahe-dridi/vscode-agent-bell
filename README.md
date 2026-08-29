@@ -71,7 +71,7 @@ Other terminal agents (aider, scripts, etc.)
 - Claude Code hook integration — works even without shell integration
 - Sound alert on any configurable regex pattern in terminal output
 - Alert when any long-running command finishes (configurable minimum duration)
-- Status bar indicator — flashes on alert, click to pause/resume
+- Status bar indicator — shows session alert count badge (🔔 7), flashes on alert, click to pause/resume
 - OS-level notification when VS Code is not focused (Windows balloon tip, macOS notification, Linux notify-send)
 - Multi-sound support — add your own files and use random or fixed mode
 - Volume control on all platforms (macOS via afplay, Linux via paplay, Windows via WAV sample scaling)
@@ -93,7 +93,7 @@ Other terminal agents (aider, scripts, etc.)
 | `Notification Bell: Test Pattern` | Paste terminal output — see which pattern matched. |
 | `Notification Bell: Set Up Claude Code Integration` | Install Stop + Notification hooks into `~/.claude/settings.json`. |
 | `Notification Bell: Remove Claude Code Integration` | Remove hooks and delete the copied sound file. Run this before uninstalling. |
-| `Notification Bell: Manage Sounds` | Add, remove, or switch between custom sound files. Toggle random mode. |
+| `Notification Bell: Manage Sounds` | Switch between bundled sounds (notify.wav / notification-bell.mp3), add custom files, toggle random mode. |
 | `Notification Bell: Add Sound File` | Browse and add a sound file (.wav / .mp3 / .aiff). |
 | `Notification Bell: Show Alert History` | View the last 50 alerts this session (time, source, what triggered). |
 
@@ -121,9 +121,18 @@ Open Settings and search **"Notification Bell"**, or edit `settings.json`:
 | `agentConfirmSound.reminderMaxCount` | `3` | Maximum reminders before stopping. Only applies when `reminderIntervalMs > 0`. |
 | `agentConfirmSound.debugLog` | `false` | Log every terminal chunk to the output channel. Use this to tune patterns. Disable when done. |
 
+### Bundled sounds
+
+Two sounds are included and selectable from **Notification Bell: Manage Sounds**:
+
+- `notify.wav` — the default short chime
+- `notification-bell.mp3` — a fuller bell tone
+
+No configuration needed — just open the command and click to switch.
+
 ### Multi-sound setup
 
-Add multiple sound files and rotate through them randomly:
+Add your own files and rotate through them randomly:
 
 ```json
 "agentConfirmSound.sounds": [
@@ -158,7 +167,10 @@ Or use **Notification Bell: Manage Sounds** from the Command Palette for a UI.
   "waiting for (your )?input",
   "execute.*\\?",
   "overwrite.*\\?",
-  "enter (your )?choice"
+  "enter (your )?choice",
+  "are you sure\\?",
+  "\\[A\\]llow",
+  "press any key"
 ]
 ```
 
