@@ -95,6 +95,7 @@ Other terminal agents (aider, scripts, etc.)
 | `Agent Bell: Remove Claude Code Integration` | Remove hooks and delete the copied sound file. Run this before uninstalling. |
 | `Agent Bell: Manage Sounds` | Add, remove, or switch between custom sound files. Toggle random mode. |
 | `Agent Bell: Add Sound File` | Browse and add a sound file (.wav / .mp3 / .aiff). |
+| `Agent Bell: Show Alert History` | View the last 50 alerts this session (time, source, what triggered). |
 
 ---
 
@@ -116,6 +117,8 @@ Open Settings and search **"Agent Bell"**, or edit `settings.json`:
 | `agentConfirmSound.commandEndMinDurationMs` | `3000` | Minimum command duration before the "command finished" alert fires. Quick commands like `ls` are ignored. |
 | `agentConfirmSound.osNotification` | `true` | Show an OS-level notification when an alert fires and VS Code is not focused. |
 | `agentConfirmSound.hookPreToolUse` | `false` | Also install a PreToolUse(Bash) hook. Only useful if you run Claude Code with manual bash approval. |
+| `agentConfirmSound.reminderIntervalMs` | `0` | Re-alert after this many ms if you haven't responded. `0` = disabled. Example: `120000` (2 min). Cancelled automatically when you run a command in the waiting terminal. |
+| `agentConfirmSound.reminderMaxCount` | `3` | Maximum reminders before stopping. Only applies when `reminderIntervalMs > 0`. |
 | `agentConfirmSound.debugLog` | `false` | Log every terminal chunk to the output channel. Use this to tune patterns. Disable when done. |
 
 ### Multi-sound setup
