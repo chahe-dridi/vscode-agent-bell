@@ -13,14 +13,19 @@ let extensionContext: vscode.ExtensionContext;
 
 let cachedPatterns: RegExp[] | null = null;
 let tempFileCounter = 0;
+let hookSignalWatcher: fs.FSWatcher | undefined;
+let lastHookSignalTs = 0;
 
 const lastTriggerAt   = new Map<vscode.Terminal, number>();
 const commandStartAt  = new Map<vscode.Terminal, number>();
 const terminalExecutionControllers = new Map<vscode.Terminal, AbortController>();
 
-const STABLE_SOUND_PATH = path.join(os.homedir(), '.claude', 'agent-bell-notify.wav');
-const MUTE_FLAG_PATH    = path.join(os.homedir(), '.claude', 'agent-bell-mute');
+const STABLE_SOUND_PATH  = path.join(os.homedir(), '.claude', 'agent-bell-notify.wav');
+const MUTE_FLAG_PATH     = path.join(os.homedir(), '.claude', 'agent-bell-mute');
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+// Written by each hook command so the extension can flash the status bar and
+// show an OS notification even when VSCode is not the source of the event.
+const HOOK_SIGNAL_PATH   = path.join(os.homedir(), '.claude', 'agent-bell-signal');
 const HOOK_MARKER = 'agent-bell-notify';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -113,21 +118,29 @@ function scaleWavBuffer(buf: Buffer, factor: number): Buffer {
   return out;
 }
 
-function buildHookCommand(soundFile: string): string {
+// hookEvent is embedded literally into the command string so each hook event
+// writes a different label to the signal file, letting the extension show the
+// right notification text (e.g. "Claude finished" vs "Claude notification").
+function buildHookCommand(soundFile: string, hookEvent: string): string {
   const platform = os.platform();
   const mutePs = MUTE_FLAG_PATH.replace(/\\/g, '\\\\');
+  // Signal path is plain ASCII — no escaping needed for the shell echo.
+  const signalPath = HOOK_SIGNAL_PATH;
 
   if (platform === 'darwin') {
     const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
-    return `test -f "${MUTE_FLAG_PATH}" || afplay -v ${volume} "${soundFile}"`;
+    // Semicolon runs the signal write unconditionally (muted or not) so the
+    // status-bar flash still appears even if audio is suppressed.
+    return `(test -f "${MUTE_FLAG_PATH}" || afplay -v ${volume} "${soundFile}"); printf '%s' "${hookEvent}" > "${signalPath}"`;
   } else if (platform === 'win32') {
     // Volume is baked into STABLE_SOUND_PATH by syncHookSound; SoundPlayer has no volume API.
     const ps = soundFile.replace(/'/g, "''");
-    return `powershell -NoProfile -NonInteractive -Command "if (-not (Test-Path '${mutePs}')) { (New-Object Media.SoundPlayer '${ps}').PlaySync() }"`;
+    const signalPs = signalPath.replace(/'/g, "''");
+    return `powershell -NoProfile -NonInteractive -Command "if (-not (Test-Path '${mutePs}')) { (New-Object Media.SoundPlayer '${ps}').PlaySync() }; [IO.File]::WriteAllText('${signalPs}', '${hookEvent}')"`;
   } else {
     const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
     const paVol = Math.round(volume * 65536);
-    return `test -f "${MUTE_FLAG_PATH}" || (paplay --volume=${paVol} "${soundFile}" 2>/dev/null || aplay "${soundFile}" 2>/dev/null)`;
+    return `(test -f "${MUTE_FLAG_PATH}" || (paplay --volume=${paVol} "${soundFile}" 2>/dev/null || aplay "${soundFile}" 2>/dev/null)); printf '%s' "${hookEvent}" > "${signalPath}"`;
   }
 }
 
@@ -251,14 +264,74 @@ function syncHookSound(context: vscode.ExtensionContext, sourcePath?: string) {
   }
 }
 
+// ─── Hook signal (IPC from Claude Code hooks back into the extension) ─────────
+
+const HOOK_EVENT_LABELS: Record<string, string> = {
+  Stop:        'Claude finished — ready for your next message',
+  Notification: 'Claude sent a notification',
+  PreToolUse:  'Claude is waiting for bash approval',
+};
+
+function handleHookSignal() {
+  try {
+    const event = fs.readFileSync(HOOK_SIGNAL_PATH, 'utf8').trim();
+    if (!event) { return; }
+    const now = Date.now();
+    const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    outputChannel.appendLine(`[hook] signal: ${event} at ${timeLabel}`);
+    if (watching) {
+      flashStatusBar(timeLabel);
+      if (!vscode.window.state.focused) {
+        showOsNotification(HOOK_EVENT_LABELS[event] ?? 'Claude Code needs your attention');
+      }
+    }
+  } catch {
+    // file may not exist yet or be mid-write — ignore
+  }
+}
+
+function setupHookSignalWatcher() {
+  if (hookSignalWatcher) { return; }
+  const claudeDir = path.dirname(HOOK_SIGNAL_PATH);
+  if (!fs.existsSync(claudeDir)) { return; }
+  try {
+    hookSignalWatcher = fs.watch(claudeDir, (_eventType, filename) => {
+      // filename can be null on some platforms — guard against it.
+      if (!filename || filename !== path.basename(HOOK_SIGNAL_PATH)) { return; }
+      const now = Date.now();
+      // Debounce: a single write can fire 2-3 fs events on some OSes.
+      if (now - lastHookSignalTs < 400) { return; }
+      lastHookSignalTs = now;
+      handleHookSignal();
+    });
+    hookSignalWatcher.on('error', (e) => {
+      outputChannel.appendLine(`[hook] signal watcher error: ${e}`);
+      hookSignalWatcher = undefined;
+    });
+    outputChannel.appendLine('[hook] watching for hook signals.');
+  } catch (e) {
+    outputChannel.appendLine(`[hook] could not set up signal watcher: ${e}`);
+  }
+}
+
+function teardownHookSignalWatcher() {
+  if (hookSignalWatcher) {
+    hookSignalWatcher.close();
+    hookSignalWatcher = undefined;
+  }
+}
+
+// ─── Hook command helpers ─────────────────────────────────────────────────────
+
 // Update the command string inside already-installed hooks (e.g. after volume or sound change).
 function refreshHookCommands() {
   try {
     const settings = readClaudeSettings();
     const hooks = settings['hooks'] as Record<string, HookGroupRead[]> | undefined;
     if (!hooks) { return; }
-    const cmd = buildHookCommand(STABLE_SOUND_PATH);
+    // Build a per-event command so each hook writes its own event name to the signal file.
     for (const { event } of HOOK_CONFIGS) {
+      const cmd = buildHookCommand(STABLE_SOUND_PATH, event);
       for (const g of (hooks[event] ?? [])) {
         for (const h of (g.hooks ?? [])) {
           if (h.command?.includes(HOOK_MARKER)) {
@@ -285,7 +358,6 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   const settings = readClaudeSettings();
   const hooks = (settings['hooks'] ?? {}) as Record<string, unknown>;
-  const cmd = buildHookCommand(STABLE_SOUND_PATH);
 
   // PreToolUse fires before every bash command — including auto-approved ones.
   // Only install it when the user explicitly opts in, to avoid sound spam.
@@ -293,6 +365,8 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
 
   for (const { event, matcher } of HOOK_CONFIGS) {
     if (event === 'PreToolUse' && !includePreToolUse) { continue; }
+    // Each event gets its own command so it writes its name to the signal file.
+    const cmd = buildHookCommand(STABLE_SOUND_PATH, event);
     const entry: HookGroup = { matcher, hooks: [{ type: 'command', command: cmd }] };
     const existing = (hooks[event] ?? []) as HookGroup[];
     if (!existing.some((g) => g.hooks?.some((h) => h.command?.includes(HOOK_MARKER)))) {
@@ -300,6 +374,8 @@ async function installClaudeHook(context: vscode.ExtensionContext): Promise<void
       hooks[event] = existing;
     }
   }
+
+  setupHookSignalWatcher();
 
   settings['hooks'] = hooks;
   writeClaudeSettings(settings);
@@ -429,9 +505,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   setWatching(getConfig().get<boolean>('enabled', true));
 
-  // Migrate existing hooks to the latest command format on startup.
+  // Migrate existing hooks to the latest command format on startup and start
+  // watching for hook signals so the status bar reflects hook-triggered events.
   if (isHookInstalled()) {
     refreshHookCommands();
+    setupHookSignalWatcher();
   }
 
   // Only show the setup modal if the user hasn't made a decision yet.
@@ -476,6 +554,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     outputChannel,
     statusBarItem,
+    { dispose: teardownHookSignalWatcher },
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('agentConfirmSound.patterns')) {
         cachedPatterns = null;
@@ -748,6 +827,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       try {
         await installClaudeHook(context);
+        setupHookSignalWatcher();
         vscode.window.showInformationMessage('Agent Bell: Claude Code integration ready.');
       } catch (e) {
         vscode.window.showErrorMessage(`Agent Bell: failed to install hook — ${e}`);
@@ -856,6 +936,7 @@ export function deactivate() {
   // Abort all pending execution watchers so async iterators don't linger after unload.
   for (const ac of terminalExecutionControllers.values()) { ac.abort(); }
   terminalExecutionControllers.clear();
+  teardownHookSignalWatcher();
   // Remove mute flag so hooks work if extension is unloaded/uninstalled.
   try { if (fs.existsSync(MUTE_FLAG_PATH)) { fs.unlinkSync(MUTE_FLAG_PATH); } } catch { /* ignore */ }
 }
