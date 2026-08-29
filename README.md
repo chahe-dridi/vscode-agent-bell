@@ -96,6 +96,7 @@ Other terminal agents (aider, scripts, etc.)
 | `Notification Bell: Manage Sounds` | Switch between bundled sounds (notify.wav / notification-bell.mp3), add custom files, toggle random mode. |
 | `Notification Bell: Add Sound File` | Browse and add a sound file (.wav / .mp3 / .aiff). |
 | `Notification Bell: Show Alert History` | View the last 50 alerts this session (time, source, what triggered). |
+| `Notification Bell: Reset to Defaults` | Reset all Notification Bell settings to defaults. |
 
 ---
 
@@ -214,6 +215,14 @@ Every agent phrases prompts differently. To find what text your agent actually o
 - Claude Code's `PreToolUse` hook fires before every bash command, not just approval prompts. If bash is auto-approved, enabling `hookPreToolUse` will trigger a sound on every command.
 - Volume scaling only applies to uncompressed 16-bit PCM WAV files. MP3 and other formats play at their encoded volume.
 - The Claude Code hook integration requires Claude Code to be installed (`~/.claude/` must exist).
+
+---
+
+## Support the project
+
+If Notification Bell saves you from missing a prompt, consider giving it a ⭐ on GitHub — it helps others find it and motivates continued development.
+
+**[⭐ Star on GitHub](https://github.com/chahe-dridi/vscode-agent-bell)**
 
 ---
 

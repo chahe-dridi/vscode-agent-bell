@@ -76,6 +76,10 @@
       {
         "command": "agentConfirmSound.showHistory",
         "title": "Notification Bell: Show Alert History"
+      },
+      {
+        "command": "agentConfirmSound.resetDefaults",
+        "title": "Notification Bell: Reset to Defaults"
       }
     ],
     "configuration": {
