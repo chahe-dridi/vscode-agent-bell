@@ -1,8 +1,8 @@
 {
   "name": "agent-confirm-sound",
-  "displayName": "Agent Bell",
-  "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
-  "version": "0.2.8",
+  "displayName": "Notification Bell",
+  "description": "Sound + OS notifications when AI agents (Claude Code, aider, Cursor CLI) need your input or terminal commands finish. Status bar flash, reminder escalation, and Claude Code hook integration.",
+  "version": "0.3.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -14,15 +14,17 @@
     "url": "https://github.com/chahe-dridi/vscode-agent-bell/issues"
   },
   "keywords": [
-    "ai",
-    "agent",
-    "sound",
     "notification",
     "bell",
+    "sound",
     "alert",
+    "terminal",
+    "ai",
+    "agent",
     "claude",
     "aider",
-    "terminal",
+    "notify",
+    "done",
     "confirm"
   ],
   "engines": {
@@ -41,39 +43,43 @@
     "commands": [
       {
         "command": "agentConfirmSound.toggle",
-        "title": "Agent Bell: Toggle Watching"
+        "title": "Notification Bell: Toggle Watching"
       },
       {
         "command": "agentConfirmSound.testSound",
-        "title": "Agent Bell: Play Test Sound"
+        "title": "Notification Bell: Play Test Sound"
       },
       {
         "command": "agentConfirmSound.showLog",
-        "title": "Agent Bell: Show Log"
+        "title": "Notification Bell: Show Log"
       },
       {
         "command": "agentConfirmSound.testPattern",
-        "title": "Agent Bell: Test Pattern"
+        "title": "Notification Bell: Test Pattern"
       },
       {
         "command": "agentConfirmSound.setupClaudeHook",
-        "title": "Agent Bell: Set Up Claude Code Integration"
+        "title": "Notification Bell: Set Up Claude Code Integration"
       },
       {
         "command": "agentConfirmSound.removeClaudeHook",
-        "title": "Agent Bell: Remove Claude Code Integration"
+        "title": "Notification Bell: Remove Claude Code Integration"
       },
       {
         "command": "agentConfirmSound.addSound",
-        "title": "Agent Bell: Add Sound File"
+        "title": "Notification Bell: Add Sound File"
       },
       {
         "command": "agentConfirmSound.chooseSounds",
-        "title": "Agent Bell: Manage Sounds"
+        "title": "Notification Bell: Manage Sounds"
+      },
+      {
+        "command": "agentConfirmSound.showHistory",
+        "title": "Notification Bell: Show Alert History"
       }
     ],
     "configuration": {
-      "title": "Agent Bell",
+      "title": "Notification Bell",
       "properties": {
         "agentConfirmSound.enabled": {
           "type": "boolean",
@@ -95,28 +101,23 @@
             "press enter to confirm",
             "confirm\\?\\s*$",
             "proceed\\?\\s*$",
+            "continue\\?\\s*$",
             "\\(yes/no\\)",
             "type ['\"]?yes['\"]? to continue",
             "allow (read|write|execute|bash|edit|create|delete|tool)",
             "do you want claude",
-            "approve|reject.*action",
             "waiting for (your )?input",
-            "tool (call|use|request)",
-            "run this command",
-            "execute.*\\?"
+            "execute.*\\?",
+            "overwrite.*\\?",
+            "enter (your )?choice"
           ],
-          "description": "Case-insensitive regex patterns matched against terminal output. A sound plays on the first match (then debounces). Tune these for the agents you use — check the output channel to see what's actually coming through."
+          "description": "Case-insensitive regex patterns matched against terminal output. A sound plays on the first match (then debounces). Tune these for the agents you use — check the output channel to see what's actually coming through. Tip: enable debugLog to inspect raw terminal chunks."
         },
         "agentConfirmSound.terminalNameFilter": {
           "type": "array",
           "items": { "type": "string" },
           "default": [],
           "description": "Optional. If non-empty, only terminals whose name contains one of these strings (case-insensitive) are watched. Leave empty to watch all terminals. Example: [\"claude\", \"aider\"]"
-        },
-        "agentConfirmSound.soundPath": {
-          "type": "string",
-          "default": "",
-          "description": "Optional absolute path to a custom sound file (.wav / .mp3 / .aiff). Leave empty to use the bundled default sound."
         },
         "agentConfirmSound.debounceMs": {
           "type": "number",
@@ -149,6 +150,22 @@
           "type": "boolean",
           "default": true,
           "description": "Show an OS-level notification (Windows balloon tip / macOS notification center / Linux notify-send) when an alert fires and VS Code is not in focus. Lets you know something needs attention even when you're on another screen."
+        },
+        "agentConfirmSound.hookPreToolUse": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also install a PreToolUse(Bash) Claude Code hook that fires before every bash command. Useful if you run Claude with manual bash approval (requiresApproval). Leave off if bash is auto-approved — every command would trigger a sound."
+        },
+        "agentConfirmSound.reminderIntervalMs": {
+          "type": "number",
+          "default": 0,
+          "description": "If non-zero, re-alert after this many milliseconds if the agent is still waiting. 0 = disabled. Example: 120000 for a 2-minute reminder. Cancelled automatically when you run a new command in the waiting terminal."
+        },
+        "agentConfirmSound.reminderMaxCount": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "description": "Maximum number of reminders to fire before stopping. Only applies when reminderIntervalMs > 0."
         },
         "agentConfirmSound.debugLog": {
           "type": "boolean",
