@@ -27,7 +27,7 @@ On first install, Agent Bell offers to set up a direct integration with Claude C
    - **`Stop`** — plays when Claude finishes its turn and is waiting for your next message
    - **`Notification`** — plays when Claude Code sends a background notification (e.g. when the window is not focused)
 
-These hooks fire directly from Claude Code's process — they work even if VS Code is not in focus.
+These hooks fire directly from Claude Code's process — they work even if VS Code is not in focus. Each hook also writes a signal to `~/.claude/agent-bell-signal` so the extension can flash the status bar and show an OS notification inside VS Code too, bridging the hook path back into the visual UI.
 
 > **PreToolUse (bash approval) hook:** If you run Claude Code with manual bash approval (`requiresApproval`), you can enable an additional hook that plays before each bash approval prompt. Set `agentConfirmSound.hookPreToolUse: true` and reinstall the integration. Leave this off if bash is auto-approved — it would fire on every command.
 
@@ -55,12 +55,13 @@ For agents that run in a standard VS Code terminal (aider, custom scripts, etc.)
 ```
 Claude Code (UI / CLI)
   └── ~/.claude/settings.json hooks
-        ├── Stop         → sound when Claude finishes its turn
-        └── Notification → sound when Claude sends a background notification
+        ├── Stop         → sound + writes ~/.claude/agent-bell-signal
+        └── Notification → sound + writes ~/.claude/agent-bell-signal
+              └── fs.watch() in extension → status bar flash + OS notification
 
 Other terminal agents (aider, scripts, etc.)
   └── VS Code shell integration API
-        └── pattern match on terminal output → sound
+        └── pattern match on terminal output → sound + status bar flash + OS notification
 ```
 
 ---
