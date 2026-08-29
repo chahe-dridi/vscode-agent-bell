@@ -129,7 +129,7 @@
           "default": 1,
           "minimum": 0,
           "maximum": 1,
-          "description": "Volume level from 0 (silent) to 1 (full). Applied via afplay on macOS and paplay on Linux. Windows SoundPlayer does not support volume control."
+          "description": "Volume level from 0 (silent) to 1 (full). Applied via afplay (macOS), paplay (Linux), and WAV sample scaling (Windows). Only uncompressed 16-bit PCM WAV files support scaling — MP3 and other formats play at their encoded volume."
         },
         "agentConfirmSound.focusTerminal": {
           "type": "boolean",
