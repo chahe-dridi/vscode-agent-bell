@@ -110,7 +110,7 @@
             "execute.*\\?",
             "overwrite.*\\?",
             "enter (your )?choice",
-            "are you sure",
+            "are you sure\\?",
             "\\[A\\]llow",
             "press any key"
           ],
