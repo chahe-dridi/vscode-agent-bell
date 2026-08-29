@@ -1,8 +1,8 @@
-# Agent Bell
+# Notification Bell
 
 **Never miss an AI agent waiting on you again.**
 
-Agent Bell watches your VS Code integrated terminals and plays a sound the moment an AI agent needs your attention — whether it's waiting for confirmation, asking permission to run a command, or finished its turn and ready for your next message.
+Notification Bell watches your VS Code integrated terminals and plays a sound the moment an AI agent needs your attention — whether it's waiting for confirmation, asking permission to run a command, or finished its turn and ready for your next message.
 
 Works with **Claude Code**, aider, Cursor CLI, and any other terminal-based AI agent.
 
@@ -10,7 +10,7 @@ Works with **Claude Code**, aider, Cursor CLI, and any other terminal-based AI a
 
 ## Installation
 
-Search **"Agent Bell"** in the VS Code Extensions view, or:
+Search **"Notification Bell"** in the VS Code Extensions view, or:
 
 ```bash
 code --install-extension chahe-dridi.agent-confirm-sound
@@ -20,7 +20,7 @@ code --install-extension chahe-dridi.agent-confirm-sound
 
 ## Claude Code integration
 
-On first install, Agent Bell offers to set up a direct integration with Claude Code. Accept the prompt and it will:
+On first install, Notification Bell offers to set up a direct integration with Claude Code. Accept the prompt and it will:
 
 1. Copy the notification sound to `~/.claude/agent-bell-notify.wav` (a stable path that survives extension updates)
 2. Add two hooks to `~/.claude/settings.json`:
@@ -31,20 +31,20 @@ These hooks fire directly from Claude Code's process — they work even if VS Co
 
 > **PreToolUse (bash approval) hook:** If you run Claude Code with manual bash approval (`requiresApproval`), you can enable an additional hook that plays before each bash approval prompt. Set `agentConfirmSound.hookPreToolUse: true` and reinstall the integration. Leave this off if bash is auto-approved — it would fire on every command.
 
-> **Privacy note:** Agent Bell only writes to your local `~/.claude/settings.json`. No data is read, collected, or sent anywhere.
+> **Privacy note:** Notification Bell only writes to your local `~/.claude/settings.json`. No data is read, collected, or sent anywhere.
 
 If you skip the prompt, you can set it up later:
 
-- `Ctrl+Shift+P` → **Agent Bell: Set Up Claude Code Integration**
-- To undo: **Agent Bell: Remove Claude Code Integration**
+- `Ctrl+Shift+P` → **Notification Bell: Set Up Claude Code Integration**
+- To undo: **Notification Bell: Remove Claude Code Integration**
 
-> **Before uninstalling Agent Bell:** run "Agent Bell: Remove Claude Code Integration" first so the hooks and sound file are cleaned up from `~/.claude/`.
+> **Before uninstalling Notification Bell:** run "Notification Bell: Remove Claude Code Integration" first so the hooks and sound file are cleaned up from `~/.claude/`.
 
 ---
 
 ## Terminal watching (other agents)
 
-For agents that run in a standard VS Code terminal (aider, custom scripts, etc.), Agent Bell also watches terminal output and plays a sound when a line matches one of your configured patterns — things like `(y/n)`, `Allow this action?`, `Press enter to confirm`.
+For agents that run in a standard VS Code terminal (aider, custom scripts, etc.), Notification Bell also watches terminal output and plays a sound when a line matches one of your configured patterns — things like `(y/n)`, `Allow this action?`, `Press enter to confirm`.
 
 > Requires shell integration to be active in the terminal. It's on by default for bash, zsh, fish, and PowerShell in recent VS Code. You'll see a small decoration to the left of your prompt when it's active.
 
@@ -87,21 +87,21 @@ Other terminal agents (aider, scripts, etc.)
 
 | Command | Description |
 |---|---|
-| `Agent Bell: Toggle Watching` | Pause or resume terminal watching (also via status bar). |
-| `Agent Bell: Play Test Sound` | Fire the sound immediately to verify audio works. |
-| `Agent Bell: Show Log` | Open the output channel for match logs and debug info. |
-| `Agent Bell: Test Pattern` | Paste terminal output — see which pattern matched. |
-| `Agent Bell: Set Up Claude Code Integration` | Install Stop + Notification hooks into `~/.claude/settings.json`. |
-| `Agent Bell: Remove Claude Code Integration` | Remove hooks and delete the copied sound file. Run this before uninstalling. |
-| `Agent Bell: Manage Sounds` | Add, remove, or switch between custom sound files. Toggle random mode. |
-| `Agent Bell: Add Sound File` | Browse and add a sound file (.wav / .mp3 / .aiff). |
-| `Agent Bell: Show Alert History` | View the last 50 alerts this session (time, source, what triggered). |
+| `Notification Bell: Toggle Watching` | Pause or resume terminal watching (also via status bar). |
+| `Notification Bell: Play Test Sound` | Fire the sound immediately to verify audio works. |
+| `Notification Bell: Show Log` | Open the output channel for match logs and debug info. |
+| `Notification Bell: Test Pattern` | Paste terminal output — see which pattern matched. |
+| `Notification Bell: Set Up Claude Code Integration` | Install Stop + Notification hooks into `~/.claude/settings.json`. |
+| `Notification Bell: Remove Claude Code Integration` | Remove hooks and delete the copied sound file. Run this before uninstalling. |
+| `Notification Bell: Manage Sounds` | Add, remove, or switch between custom sound files. Toggle random mode. |
+| `Notification Bell: Add Sound File` | Browse and add a sound file (.wav / .mp3 / .aiff). |
+| `Notification Bell: Show Alert History` | View the last 50 alerts this session (time, source, what triggered). |
 
 ---
 
 ## Settings
 
-Open Settings and search **"Agent Bell"**, or edit `settings.json`:
+Open Settings and search **"Notification Bell"**, or edit `settings.json`:
 
 | Setting | Default | Description |
 |---|---|---|
@@ -133,7 +133,7 @@ Add multiple sound files and rotate through them randomly:
 "agentConfirmSound.soundMode": "random"
 ```
 
-Or use **Agent Bell: Manage Sounds** from the Command Palette for a UI.
+Or use **Notification Bell: Manage Sounds** from the Command Palette for a UI.
 
 ### Default patterns
 
@@ -187,10 +187,10 @@ Patterns that were removed because they matched normal informational output:
 Every agent phrases prompts differently. To find what text your agent actually outputs:
 
 1. Enable debug mode: `"agentConfirmSound.debugLog": true`
-2. Open **Agent Bell: Show Log**
+2. Open **Notification Bell: Show Log**
 3. Trigger a prompt in your agent
 4. Copy the `[debug]` line text
-5. Run **Agent Bell: Test Pattern** and paste it — it will tell you which pattern matched (or not)
+5. Run **Notification Bell: Test Pattern** and paste it — it will tell you which pattern matched (or not)
 6. Adjust your `agentConfirmSound.patterns` to match
 7. Disable debug mode when done
 

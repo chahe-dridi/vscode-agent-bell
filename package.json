@@ -1,7 +1,7 @@
 {
   "name": "agent-confirm-sound",
-  "displayName": "Agent Bell",
-  "description": "Plays a sound when a terminal-based AI agent (Claude Code, aider, etc.) is waiting for you to confirm or approve an action.",
+  "displayName": "Notification Bell",
+  "description": "Sound + OS notifications when AI agents (Claude Code, aider, Cursor CLI) need your input or terminal commands finish. Status bar flash, reminder escalation, and Claude Code hook integration.",
   "version": "0.3.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
@@ -14,15 +14,17 @@
     "url": "https://github.com/chahe-dridi/vscode-agent-bell/issues"
   },
   "keywords": [
-    "ai",
-    "agent",
-    "sound",
     "notification",
     "bell",
+    "sound",
     "alert",
+    "terminal",
+    "ai",
+    "agent",
     "claude",
     "aider",
-    "terminal",
+    "notify",
+    "done",
     "confirm"
   ],
   "engines": {
@@ -41,43 +43,43 @@
     "commands": [
       {
         "command": "agentConfirmSound.toggle",
-        "title": "Agent Bell: Toggle Watching"
+        "title": "Notification Bell: Toggle Watching"
       },
       {
         "command": "agentConfirmSound.testSound",
-        "title": "Agent Bell: Play Test Sound"
+        "title": "Notification Bell: Play Test Sound"
       },
       {
         "command": "agentConfirmSound.showLog",
-        "title": "Agent Bell: Show Log"
+        "title": "Notification Bell: Show Log"
       },
       {
         "command": "agentConfirmSound.testPattern",
-        "title": "Agent Bell: Test Pattern"
+        "title": "Notification Bell: Test Pattern"
       },
       {
         "command": "agentConfirmSound.setupClaudeHook",
-        "title": "Agent Bell: Set Up Claude Code Integration"
+        "title": "Notification Bell: Set Up Claude Code Integration"
       },
       {
         "command": "agentConfirmSound.removeClaudeHook",
-        "title": "Agent Bell: Remove Claude Code Integration"
+        "title": "Notification Bell: Remove Claude Code Integration"
       },
       {
         "command": "agentConfirmSound.addSound",
-        "title": "Agent Bell: Add Sound File"
+        "title": "Notification Bell: Add Sound File"
       },
       {
         "command": "agentConfirmSound.chooseSounds",
-        "title": "Agent Bell: Manage Sounds"
+        "title": "Notification Bell: Manage Sounds"
       },
       {
         "command": "agentConfirmSound.showHistory",
-        "title": "Agent Bell: Show Alert History"
+        "title": "Notification Bell: Show Alert History"
       }
     ],
     "configuration": {
-      "title": "Agent Bell",
+      "title": "Notification Bell",
       "properties": {
         "agentConfirmSound.enabled": {
           "type": "boolean",
