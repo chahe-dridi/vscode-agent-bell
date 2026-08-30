@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.4.2] — 2026-08-30
+
+- Add: **Test Pattern copies match to clipboard** — when a pattern matches, the regex source is automatically written to the clipboard so it can be pasted directly into `settings.json` without hunting through the log
+- Docs: README overhauled — marketplace badges, feature table with icons, navigation links, common configuration examples, and cleaner layout throughout
+
+## [0.4.1] — 2026-08-30
+
+- Add: **"Notification Bell: Reset to Defaults" command** — resets all 15 settings keys to their defaults via a modal confirmation dialog; useful for starting fresh after heavy customisation
+- Docs: added star-the-repo link to README contributing section
+
+## [0.4.0] — 2026-08-30
+
+- Add: **notification-bell.mp3 selectable in Manage Sounds** — the second bundled sound now appears as a proper option in the Manage Sounds quick pick alongside `notify.wav`, with active-state indicator, preview on click, and hook sync on switch
+- Add: **status bar session alert count badge** — the status bar now shows `🔔 7` (capped at `🔔 99+`) so you can see how many alerts fired this session at a glance; updates on every alert and on history clear
+- Add: new default patterns — `are you sure\?`, `\[A\]llow`, `press any key`
+- Fix: volume setting description corrected — Windows volume control works via in-memory 16-bit PCM WAV sample scaling (not SoundPlayer, which has no volume API)
+
+## [0.3.0] — 2026-08-29
+
+- Rename: extension display name changed from **Agent Bell** to **Notification Bell** for better discoverability (internal package name `agent-confirm-sound` unchanged — existing installs are not affected)
+- Add: **hook IPC signal file** — each Claude Code hook now also writes the event name to `~/.claude/agent-bell-signal`; the extension watches this file with `fs.watch()` to flash the status bar and show an OS notification inside VS Code even when hooks fire outside VS Code focus
+- Add: **reminder escalation** — set `reminderIntervalMs` to re-alert after N milliseconds if you haven't responded; `reminderMaxCount` caps the total reminders; reminders cancel automatically when you run a new command in the waiting terminal
+- Add: **alert history** — `Show Alert History` command shows the last 50 alerts (time, source, trigger type) in a quick pick; includes a "Clear history" option
+- Add: `agentConfirmSound.hookPreToolUse` setting — opt-in hook that fires before every Claude Code bash command (useful only with manual bash approval; off by default)
+- Add: `agentConfirmSound.reminderIntervalMs` and `agentConfirmSound.reminderMaxCount` settings
+- Fix: **AbortController per terminal** — `for await` stream loops on terminal output now cancel cleanly when a terminal closes, eliminating a memory leak from dangling async iterators
+- Fix: **WAV header validation before scaling** — `scaleWavBuffer` now validates RIFF/WAVE magic bytes and checks `audioFormat == 1` (PCM) and `bitsPerSample == 16` before attempting to scale samples; non-standard WAV files no longer produce corrupted audio
+- Fix: **temp file race on Windows** — volume-scaled WAV temp files now use a monotonic counter (`Date.now()-${++counter}`) instead of a shared filename, eliminating corruption when two alerts arrive within one play duration
+- Fix: **terminal filter applied before stream start** — `watchExecution` is no longer started for terminals that would always be filtered by `terminalNameFilter`, removing unnecessary CPU overhead
+- Fix: `isHookInstalled()` cache removed — always reads from disk to avoid stale state after external edits to `~/.claude/settings.json`
+- Change: removed three false-positive patterns (`approve|reject.*action`, `tool (call|use|request)`, `run this command`) and added three more precise ones (`continue\?\s*$`, `overwrite.*\?`, `enter (your )?choice`)
+- Docs: added `CONTRIBUTING.md` with branch strategy, pattern guidelines, and dev setup instructions
+- Build: `.vscodeignore` updated to exclude `.claude/` from VSIX bundle (prevents local `settings.local.json` from being packaged)
+
 ## [0.2.8] — 2026-08-14
 
 - Fix: **non-WAV files (MP3, OGG, etc.) no longer break the Claude Code hook on Windows** — `Media.SoundPlayer` only supports WAV; when the active sound is a non-WAV file, the hook now falls back to the bundled WAV and logs the reason instead of writing MP3 bytes to a `.wav` path and silently failing
