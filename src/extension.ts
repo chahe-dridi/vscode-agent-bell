@@ -967,7 +967,8 @@ export function activate(context: vscode.ExtensionContext) {
       if (matched) {
         outputChannel.appendLine(`[test] ✅ MATCH — pattern: ${matched}`);
         outputChannel.show();
-        vscode.window.showInformationMessage(`Notification Bell: matched — ${matched}`);
+        await vscode.env.clipboard.writeText(matched.source);
+        vscode.window.showInformationMessage(`Notification Bell: matched — ${matched}  (copied to clipboard)`);
       } else {
         outputChannel.appendLine(`[test] ❌ no match for: ${clean}`);
         outputChannel.show();
