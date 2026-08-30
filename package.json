@@ -23,6 +23,8 @@
     "agent",
     "claude",
     "aider",
+    "gemini",
+    "codex",
     "notify",
     "done",
     "confirm"

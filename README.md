@@ -12,7 +12,7 @@
 
 Notification Bell watches your VS Code integrated terminals and **plays a sound** the moment an AI agent needs your attention — whether it's waiting for confirmation, asking to run a command, or finished its turn.
 
-Works with **Claude Code**, **aider**, **Cursor CLI**, and any other terminal-based AI agent.
+Works with **Claude Code**, **aider**, **Gemini CLI**, **Codex CLI**, **Cursor CLI**, and any other terminal-based AI agent.
 
 [Install from Marketplace](#installation) · [Claude Code Setup](#claude-code-integration) · [Configuration](#settings) · [Contributing](#contributing)
 
@@ -75,6 +75,17 @@ These hooks fire directly from Claude Code's process — **they work even if VS 
 For agents running in a standard VS Code terminal — aider, custom scripts, etc. — Notification Bell watches terminal output and plays a sound when a line matches a configured regex pattern, such as `(y/n)`, `Allow this action?`, or `Press enter to confirm`.
 
 > Requires shell integration, which is on by default for bash, zsh, fish, and PowerShell in recent VS Code. A small decoration appears to the left of your prompt when it's active.
+
+**Quick setup for common agents:**
+
+| Agent | `terminalNameFilter` value |
+|---|---|
+| Claude Code | `["claude"]` |
+| aider | `["aider"]` |
+| Gemini CLI | `["gemini"]` |
+| Codex CLI | `["codex"]` |
+
+Leave the filter empty to watch all terminals.
 
 ---
 
