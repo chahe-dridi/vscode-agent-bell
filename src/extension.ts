@@ -717,6 +717,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('agentConfirmSound.showLog', () => {
       outputChannel.show();
     }),
+    vscode.commands.registerCommand('agentConfirmSound.dismissReminder', () => {
+      if (!reminderTimer) {
+        vscode.window.showInformationMessage('No active reminder.');
+        return;
+      }
+      clearReminder();
+      vscode.window.showInformationMessage('Reminder dismissed.');
+    }),
     vscode.commands.registerCommand('agentConfirmSound.addSound', async () => {
       const uris = await vscode.window.showOpenDialog({
         canSelectMany: true,

@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notifications when AI agents (Claude Code, aider, Cursor CLI) need your input or terminal commands finish. Status bar flash, reminder escalation, and Claude Code hook integration.",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -80,6 +80,10 @@
       {
         "command": "agentConfirmSound.resetDefaults",
         "title": "Notification Bell: Reset to Defaults"
+      },
+      {
+        "command": "agentConfirmSound.dismissReminder",
+        "title": "Notification Bell: Dismiss Reminder"
       }
     ],
     "configuration": {
