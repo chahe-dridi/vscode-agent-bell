@@ -80,6 +80,10 @@
       {
         "command": "agentConfirmSound.resetDefaults",
         "title": "Notification Bell: Reset to Defaults"
+      },
+      {
+        "command": "agentConfirmSound.dismissReminder",
+        "title": "Notification Bell: Dismiss Reminder"
       }
     ],
     "configuration": {
