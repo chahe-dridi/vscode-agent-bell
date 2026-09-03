@@ -139,8 +139,12 @@ function showOsNotification(message: string) {
     cp.spawn('osascript', ['-e', `display notification "${escaped}" with title "Notification Bell"`],
       { stdio: 'ignore', detached: true }).unref();
   } else {
-    cp.spawn('notify-send', ['Notification Bell', message, '--expire-time=5000'],
-      { stdio: 'ignore', detached: true }).unref();
+    const child = cp.spawn('notify-send', ['Notification Bell', message, '--expire-time=5000'],
+      { stdio: 'ignore', detached: true });
+    child.on('error', () => {
+      outputChannel.appendLine('[warn] notify-send not found — install libnotify-bin for OS notifications on Linux');
+    });
+    child.unref();
   }
 }
 
