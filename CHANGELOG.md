@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.4] — 2026-09-03
+
+- Fix: **Linux notify-send missing now logs a warning** — when `notify-send` is not installed, the extension now logs a clear warning to the output channel instead of failing silently; the error handler is correctly attached before `.unref()` so the `ENOENT` event is captured
+
+## [0.4.3] — 2026-09-03
+
+- Add: **"Notification Bell: Dismiss Reminder" command** — dismisses an active reminder escalation immediately from the Command Palette; shows a message if no reminder is active
+
 ## [0.4.2] — 2026-08-30
 
 - Add: **Test Pattern copies match to clipboard** — when a pattern matches, the regex source is automatically written to the clipboard so it can be pasted directly into `settings.json` without hunting through the log
