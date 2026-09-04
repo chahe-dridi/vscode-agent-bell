@@ -92,6 +92,10 @@ function getConfig() {
   return vscode.workspace.getConfiguration('agentConfirmSound');
 }
 
+function getAlertOn(): string[] {
+  return getConfig().get<string[]>('alertOn', ['confirmation', 'completion']);
+}
+
 // ─── Sound selection ─────────────────────────────────────────────────────────
 
 function pickSoundFile(context: vscode.ExtensionContext): string {
@@ -330,10 +334,19 @@ const HOOK_EVENT_LABELS: Record<string, string> = {
   PreToolUse:  'Claude is waiting for bash approval',
 };
 
+// Maps each Claude Code hook event to an alertOn trigger category.
+const HOOK_TRIGGER_TYPE: Record<string, string> = {
+  Stop:        'completion',
+  Notification: 'completion',
+  PreToolUse:  'confirmation',
+};
+
 function handleHookSignal() {
   try {
     const event = fs.readFileSync(HOOK_SIGNAL_PATH, 'utf8').trim();
     if (!event) { return; }
+    const triggerType = HOOK_TRIGGER_TYPE[event];
+    if (triggerType && !getAlertOn().includes(triggerType)) { return; }
     const now = Date.now();
     const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     outputChannel.appendLine(`[hook] signal: ${event} at ${timeLabel}`);
@@ -655,7 +668,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Only stream output for terminals that could produce alerts.
       // Skipping filtered-out and pattern-free cases avoids reading their entire output.
-      if (getPatterns().length > 0 && terminalPassesNameFilter(event.terminal)) {
+      if (getAlertOn().includes('confirmation') && getPatterns().length > 0 && terminalPassesNameFilter(event.terminal)) {
         // Abort the previous watcher for this terminal (e.g. rapid command re-runs).
         const prev = terminalExecutionControllers.get(event.terminal);
         if (prev) { prev.abort(); }
@@ -666,6 +679,7 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.window.onDidEndTerminalShellExecution((event) => {
       if (!watching) { return; }
+      if (!getAlertOn().includes('completion')) { return; }
       if (!getConfig().get<boolean>('alertOnCommandEnd', true)) { return; }
       if (!terminalPassesNameFilter(event.terminal)) { return; }
 
@@ -728,6 +742,44 @@ export function activate(context: vscode.ExtensionContext) {
       }
       clearReminder();
       vscode.window.showInformationMessage('Reminder dismissed.');
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.configureAlertTriggers', async () => {
+      const current = getAlertOn();
+      type TriggerItem = vscode.QuickPickItem & { value: string };
+      const items: TriggerItem[] = [
+        {
+          label: '$(bell) Confirmation prompts',
+          description: 'Alert when your agent asks y/n, needs approval, or waits for input',
+          picked: current.includes('confirmation'),
+          value: 'confirmation',
+        },
+        {
+          label: '$(check) Task completed',
+          description: 'Alert when a long-running command or agent turn finishes',
+          picked: current.includes('completion'),
+          value: 'completion',
+        },
+      ];
+      const selected = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        title: 'Notification Bell — When should alerts fire?',
+        placeHolder: 'Space to toggle, Enter to confirm',
+      });
+      if (selected === undefined) { return; }
+      if (selected.length === 0) {
+        const confirm = await vscode.window.showWarningMessage(
+          'No triggers selected — Notification Bell will never alert. Are you sure?',
+          'Disable all', 'Cancel'
+        );
+        if (confirm !== 'Disable all') { return; }
+      }
+      const newValue = (selected as TriggerItem[]).map((i) => i.value);
+      await getConfig().update('alertOn', newValue, vscode.ConfigurationTarget.Global);
+      vscode.window.showInformationMessage(
+        newValue.length === 0
+          ? 'Notification Bell: all alert triggers disabled.'
+          : `Notification Bell: alerting on — ${(selected as TriggerItem[]).map((i) => i.label.replace(/\$\(\w[\w-]*\) /, '')).join(' + ')}.`
+      );
     }),
     vscode.commands.registerCommand('agentConfirmSound.addSound', async () => {
       const uris = await vscode.window.showOpenDialog({
@@ -1003,6 +1055,7 @@ export function activate(context: vscode.ExtensionContext) {
       const config = vscode.workspace.getConfiguration();
       const keys = [
         'agentConfirmSound.enabled',
+        'agentConfirmSound.alertOn',
         'agentConfirmSound.patterns',
         'agentConfirmSound.terminalNameFilter',
         'agentConfirmSound.debounceMs',
@@ -1050,6 +1103,7 @@ async function watchExecution(
 
 function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Terminal, chunk: string) {
   if (!watching) { return; }
+  if (!getAlertOn().includes('confirmation')) { return; }
   const patterns = getPatterns();
   if (!patterns.length) { return; }
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.0] — 2026-09-04
+
+- Add: **Configure Alert Triggers** — new `agentConfirmSound.alertOn` setting and `Notification Bell: Configure Alert Triggers` command let you choose when alerts fire: **Confirmation prompts** (agent asking y/n or waiting for approval), **Task completed** (command or agent turn finished), or both. Default is both. Each trigger type independently gates pattern matching, command-end alerts, and Claude Code hook events.
+
 ## [0.4.4] — 2026-09-03
 
 - Fix: **Linux notify-send missing now logs a warning** — when `notify-send` is not installed, the extension now logs a clear warning to the output channel instead of failing silently; the error handler is correctly attached before `.unref()` so the `ENOENT` event is captured
