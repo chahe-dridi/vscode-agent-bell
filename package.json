@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notifications when AI agents (Claude Code, aider, Cursor CLI) need your input or terminal commands finish. Status bar flash, reminder escalation, and Claude Code hook integration.",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -84,6 +84,10 @@
       {
         "command": "agentConfirmSound.dismissReminder",
         "title": "Notification Bell: Dismiss Reminder"
+      },
+      {
+        "command": "agentConfirmSound.configureAlertTriggers",
+        "title": "Notification Bell: Configure Alert Triggers"
       }
     ],
     "configuration": {
@@ -93,6 +97,15 @@
           "type": "boolean",
           "default": true,
           "description": "Enable watching terminals for confirmation prompts."
+        },
+        "agentConfirmSound.alertOn": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["confirmation", "completion"]
+          },
+          "default": ["confirmation", "completion"],
+          "description": "When to fire alerts. 'confirmation' = agent waiting for y/n or approval (pattern match). 'completion' = command or agent turn finished (command-end + Claude Code Stop hook). Use 'Notification Bell: Configure Alert Triggers' from the Command Palette for an easier picker."
         },
         "agentConfirmSound.patterns": {
           "type": "array",
