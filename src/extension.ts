@@ -520,14 +520,14 @@ function updateStatusBar() {
     statusBarItem.text = '🔕';
     statusBarItem.color = undefined;
     statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    statusBarItem.tooltip = 'Notification Bell — paused (click to resume)';
+    statusBarItem.tooltip = 'Notification Bell — paused (click to view alert history)';
   } else {
     statusBarItem.text = count > 99 ? '🔔 99+' : count > 0 ? `🔔 ${count}` : '🔔';
     statusBarItem.color = undefined;
     statusBarItem.backgroundColor = undefined;
     statusBarItem.tooltip = count > 0
       ? `Notification Bell — ${count} alert${count === 1 ? '' : 's'} this session`
-      : 'Notification Bell — watching (click to pause)';
+      : 'Notification Bell — watching (click to view alert history)';
   }
   statusBarItem.show();
 }
@@ -575,7 +575,7 @@ export function activate(context: vscode.ExtensionContext) {
   outputChannel = vscode.window.createOutputChannel('Notification Bell');
 
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -100);
-  statusBarItem.command = 'agentConfirmSound.toggle';
+  statusBarItem.command = 'agentConfirmSound.showHistory';
   statusBarItem.show();
 
   setWatching(getConfig().get<boolean>('enabled', true));
