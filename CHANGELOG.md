@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.1] — 2026-09-09
+
+- Fix: **Status bar click now opens Alert History** — clicking `🔔` opens Show Alert History instead of toggling pause; Toggle Watching remains available via the Command Palette; tooltips updated to match
+
 ## [0.5.0] — 2026-09-04
 
 - Add: **Configure Alert Triggers** — new `agentConfirmSound.alertOn` setting and `Notification Bell: Configure Alert Triggers` command let you choose when alerts fire: **Confirmation prompts** (agent asking y/n or waiting for approval), **Task completed** (command or agent turn finished), or both. Default is both. Each trigger type independently gates pattern matching, command-end alerts, and Claude Code hook events.
