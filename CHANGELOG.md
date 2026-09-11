@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.3] — 2026-09-11
+
+- Docs: updated extension description — now correctly lists Gemini CLI and Codex CLI (removed erroneous "Cursor CLI" reference); added keywords: gemini, codex, cursor, copilot, productivity, monitoring, automation for better marketplace discoverability
+
 ## [0.5.2] — 2026-09-11
 
 - Improve: **Alert History overhauled** — history now persists across VS Code reloads (restored from globalState on activation); capacity raised from 50 to 100 entries; each row shows what happened ("Pattern match — claude", "Command done — npm test", "Claude Code — Stop") with relative time ("2m ago · 10:42:33"); clicking any alert copies its detail text to the clipboard; Clear History also wipes the persisted store
