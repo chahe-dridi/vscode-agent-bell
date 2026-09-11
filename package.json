@@ -50,51 +50,63 @@
     "commands": [
       {
         "command": "agentConfirmSound.toggle",
-        "title": "Notification Bell: Toggle Watching"
+        "title": "Toggle Watching",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.testSound",
-        "title": "Notification Bell: Play Test Sound"
+        "title": "Play Test Sound",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.showLog",
-        "title": "Notification Bell: Show Log"
+        "title": "Show Log",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.testPattern",
-        "title": "Notification Bell: Test Pattern"
+        "title": "Test Pattern",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.setupClaudeHook",
-        "title": "Notification Bell: Set Up Claude Code Integration"
+        "title": "Set Up Claude Code Integration",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.removeClaudeHook",
-        "title": "Notification Bell: Remove Claude Code Integration"
+        "title": "Remove Claude Code Integration",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.addSound",
-        "title": "Notification Bell: Add Sound File"
+        "title": "Add Sound File",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.chooseSounds",
-        "title": "Notification Bell: Manage Sounds"
+        "title": "Manage Sounds",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.showHistory",
-        "title": "Notification Bell: Show Alert History"
+        "title": "Show Alert History",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.resetDefaults",
-        "title": "Notification Bell: Reset to Defaults"
+        "title": "Reset to Defaults",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.dismissReminder",
-        "title": "Notification Bell: Dismiss Reminder"
+        "title": "Dismiss Reminder",
+        "category": "Notification Bell"
       },
       {
         "command": "agentConfirmSound.configureAlertTriggers",
-        "title": "Notification Bell: Configure Alert Triggers"
+        "title": "Configure Alert Triggers",
+        "category": "Notification Bell"
       }
     ],
     "configuration": {
