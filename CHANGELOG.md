@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.6] — 2026-09-11
+
+- Fix: **Alert History shows failed commands** — command-end alerts now store the exit code in the detail field (`finished in 12s (exit 1)`); the history quick pick shows `$(error)` and "Command failed" for non-zero exits and `$(check)` and "Command done" for clean exits, making it easy to spot failures at a glance
+
 ## [0.5.5] — 2026-09-11
 
 - Improve: **Status bar tooltip shows active terminal filter** — when `terminalNameFilter` is set, the tooltip now reads "watching: claude only" instead of a generic message; shows "watching all terminals" when the filter is empty
