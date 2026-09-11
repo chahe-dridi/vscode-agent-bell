@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notifications when AI agents (Claude Code, aider, Cursor CLI) need your input or terminal commands finish. Status bar flash, reminder escalation, and Claude Code hook integration.",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {

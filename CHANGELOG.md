@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.2] — 2026-09-11
+
+- Improve: **Alert History overhauled** — history now persists across VS Code reloads (restored from globalState on activation); capacity raised from 50 to 100 entries; each row shows what happened ("Pattern match — claude", "Command done — npm test", "Claude Code — Stop") with relative time ("2m ago · 10:42:33"); clicking any alert copies its detail text to the clipboard; Clear History also wipes the persisted store
+
 ## [0.5.1] — 2026-09-09
 
 - Fix: **Status bar click now opens Alert History** — clicking `🔔` opens Show Alert History instead of toggling pause; Toggle Watching remains available via the Command Palette; tooltips updated to match

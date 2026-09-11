@@ -24,12 +24,21 @@ interface AlertRecord {
   type: 'hook' | 'pattern' | 'command-end';
   detail: string;
 }
-const MAX_HISTORY = 50;
+const MAX_HISTORY = 100;
 const alertHistory: AlertRecord[] = [];
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000)        { return 'just now'; }
+  if (diff < 3_600_000)     { return `${Math.floor(diff / 60_000)}m ago`; }
+  if (diff < 86_400_000)    { return `${Math.floor(diff / 3_600_000)}h ago`; }
+  return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
 
 function addAlert(record: AlertRecord) {
   alertHistory.unshift(record);
   if (alertHistory.length > MAX_HISTORY) { alertHistory.length = MAX_HISTORY; }
+  extensionContext.globalState.update('alertHistory', alertHistory);
   updateStatusBar();
 }
 
@@ -574,6 +583,10 @@ export function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
   outputChannel = vscode.window.createOutputChannel('Notification Bell');
 
+  // Restore persisted history from previous session.
+  const saved = context.globalState.get<AlertRecord[]>('alertHistory', []);
+  alertHistory.push(...saved.slice(0, MAX_HISTORY));
+
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -100);
   statusBarItem.command = 'agentConfirmSound.showHistory';
   statusBarItem.show();
@@ -993,30 +1006,62 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(`Notification Bell: failed to remove hook — ${e}`);
       }
     }),
-    vscode.commands.registerCommand('agentConfirmSound.showHistory', () => {
+    vscode.commands.registerCommand('agentConfirmSound.showHistory', async () => {
       if (alertHistory.length === 0) {
-        vscode.window.showInformationMessage('Notification Bell: no alerts recorded yet in this session.');
+        vscode.window.showInformationMessage('Notification Bell: no alerts recorded yet.');
         return;
       }
-      const items: vscode.QuickPickItem[] = alertHistory.map((r) => {
-        const time = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const icon = r.type === 'hook' ? '$(cloud)' : r.type === 'command-end' ? '$(check)' : '$(bell)';
-        return { label: `${icon}  ${time}`, description: r.source, detail: r.detail };
-      });
-      items.push(
-        { label: '', kind: vscode.QuickPickItemKind.Separator },
-        { label: '$(trash) Clear history', description: `${alertHistory.length} alerts` }
-      );
-      vscode.window.showQuickPick(items, {
+
+      const buildItems = (): vscode.QuickPickItem[] => {
+        const rows: vscode.QuickPickItem[] = alertHistory.map((r) => {
+          const absTime = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const icon = r.type === 'hook' ? '$(cloud)' : r.type === 'command-end' ? '$(check)' : '$(bell)';
+
+          let summary: string;
+          let copyText: string;
+          if (r.type === 'hook') {
+            summary = `Claude Code — ${r.detail}`;
+            copyText = HOOK_EVENT_LABELS[r.detail] ?? r.detail;
+          } else if (r.type === 'command-end') {
+            summary = `Command done — ${r.source}`;
+            copyText = r.detail;
+          } else {
+            summary = `Pattern match — ${r.source}`;
+            copyText = r.detail;
+          }
+
+          return {
+            label: `${icon}  ${summary}`,
+            description: `${relativeTime(r.ts)} · ${absTime}`,
+            detail: copyText,
+          };
+        });
+        rows.push(
+          { label: '', kind: vscode.QuickPickItemKind.Separator },
+          { label: '$(trash) Clear history', description: `${alertHistory.length} alert${alertHistory.length === 1 ? '' : 's'}` }
+        );
+        return rows;
+      };
+
+      const pick = await vscode.window.showQuickPick(buildItems(), {
         title: `Notification Bell — Alert History  (${alertHistory.length})`,
-        placeHolder: 'Recent alerts — read-only. Select "Clear history" to reset.',
-      }).then((pick) => {
-        if (pick?.label.includes('Clear history')) {
-          alertHistory.length = 0;
-          updateStatusBar();
-          vscode.window.showInformationMessage('Notification Bell: history cleared.');
-        }
+        placeHolder: 'Select an alert to copy its detail · Clear history at the bottom',
       });
+
+      if (!pick) { return; }
+
+      if (pick.label.includes('Clear history')) {
+        alertHistory.length = 0;
+        extensionContext.globalState.update('alertHistory', []);
+        updateStatusBar();
+        vscode.window.showInformationMessage('Notification Bell: history cleared.');
+        return;
+      }
+
+      if (pick.detail) {
+        await vscode.env.clipboard.writeText(pick.detail);
+        vscode.window.showInformationMessage(`Notification Bell: copied — ${pick.detail}`);
+      }
     }),
     vscode.commands.registerCommand('agentConfirmSound.testPattern', async () => {
       const input = await vscode.window.showInputBox({
