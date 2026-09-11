@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.5] — 2026-09-11
+
+- Improve: **Status bar tooltip shows active terminal filter** — when `terminalNameFilter` is set, the tooltip now reads "watching: claude only" instead of a generic message; shows "watching all terminals" when the filter is empty
+- Improve: **Command Palette grouping** — all 12 commands now use `"category": "Notification Bell"` so typing "Notification Bell" in the palette shows them all cleanly grouped together
+
 ## [0.5.4] — 2026-09-11
 
 - Improve: **Alert History is now searchable** — type in the history quick pick to filter by terminal name, relative time, pattern text, elapsed time, or hook event; uses VS Code's built-in `matchOnDescription` and `matchOnDetail` flags
