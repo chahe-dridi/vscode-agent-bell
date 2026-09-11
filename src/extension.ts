@@ -721,7 +721,7 @@ export function activate(context: vscode.ExtensionContext) {
       const exit = event.exitCode;
       const elapsedStr = `finished in ${Math.round(elapsed / 1000)}s`;
       outputChannel.appendLine(`[done] "${event.terminal.name}" ${elapsedStr} (exit ${exit ?? '?'})`);
-      addAlert({ ts: now, source: event.terminal.name, type: 'command-end', detail: elapsedStr });
+      addAlert({ ts: now, source: event.terminal.name, type: 'command-end', detail: `${elapsedStr} (exit ${exit ?? '?'})` });
 
       if (getConfig().get<boolean>('focusTerminal', false)) { event.terminal.show(true); }
 
@@ -1019,7 +1019,7 @@ export function activate(context: vscode.ExtensionContext) {
       const buildItems = (): vscode.QuickPickItem[] => {
         const rows: vscode.QuickPickItem[] = alertHistory.map((r) => {
           const absTime = new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          const icon = r.type === 'hook' ? '$(cloud)' : r.type === 'command-end' ? '$(check)' : '$(bell)';
+          let icon = r.type === 'hook' ? '$(cloud)' : '$(bell)';
 
           let summary: string;
           let copyText: string;
@@ -1027,13 +1027,14 @@ export function activate(context: vscode.ExtensionContext) {
             summary = `Claude Code — ${r.detail}`;
             copyText = HOOK_EVENT_LABELS[r.detail] ?? r.detail;
           } else if (r.type === 'command-end') {
-            summary = `Command done — ${r.source}`;
-            copyText = r.detail;
+             const failed = r.detail.includes('exit') && !/exit 0/.test(r.detail);
+             icon = failed ? '$(error)' : '$(check)';
+             summary = `Command ${failed ? 'failed' : 'done'} — ${r.source}`;
+             copyText = r.detail;
           } else {
             summary = `Pattern match — ${r.source}`;
             copyText = r.detail;
           }
-
           return {
             label: `${icon}  ${summary}`,
             description: `${relativeTime(r.ts)} · ${absTime}`,
