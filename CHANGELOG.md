@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.4] — 2026-09-11
+
+- Improve: **Alert History is now searchable** — type in the history quick pick to filter by terminal name, relative time, pattern text, elapsed time, or hook event; uses VS Code's built-in `matchOnDescription` and `matchOnDetail` flags
+
 ## [0.5.3] — 2026-09-11
 
 - Docs: updated extension description — now correctly lists Gemini CLI and Codex CLI (removed erroneous "Cursor CLI" reference); added keywords: gemini, codex, cursor, copilot, productivity, monitoring, automation for better marketplace discoverability
