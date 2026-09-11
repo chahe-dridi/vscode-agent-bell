@@ -525,6 +525,10 @@ function updateStatusBar() {
     return;
   }
   const count = alertHistory.length;
+  const filter = getConfig().get<string[]>('terminalNameFilter', []);
+  const filterLabel = filter.length > 0
+    ? `watching: ${filter.join(', ')} only`
+    : 'watching all terminals';
   if (!watching) {
     statusBarItem.text = '🔕';
     statusBarItem.color = undefined;
@@ -535,8 +539,8 @@ function updateStatusBar() {
     statusBarItem.color = undefined;
     statusBarItem.backgroundColor = undefined;
     statusBarItem.tooltip = count > 0
-      ? `Notification Bell — ${count} alert${count === 1 ? '' : 's'} this session`
-      : 'Notification Bell — watching (click to view alert history)';
+      ? `Notification Bell — ${count} alert${count === 1 ? '' : 's'} this session · ${filterLabel}`
+      : `Notification Bell — ${filterLabel} (click to view alert history)`;
   }
   statusBarItem.show();
 }
