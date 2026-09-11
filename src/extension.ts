@@ -1046,6 +1046,8 @@ export function activate(context: vscode.ExtensionContext) {
       const pick = await vscode.window.showQuickPick(buildItems(), {
         title: `Notification Bell — Alert History  (${alertHistory.length})`,
         placeHolder: 'Select an alert to copy its detail · Clear history at the bottom',
+        matchOnDescription: true,
+        matchOnDetail: true,
       });
 
       if (!pick) { return; }
