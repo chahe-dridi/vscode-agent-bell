@@ -872,7 +872,7 @@ export function activate(context: vscode.ExtensionContext) {
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
         items.push({
           label: '$(add) Add sound file…',
-          description: 'Browse for .wav / .mp3 / .aiff',
+          description: 'Browse for .wav / .mp3 / .aiff / .ogg / .flac',
         });
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
         items.push({

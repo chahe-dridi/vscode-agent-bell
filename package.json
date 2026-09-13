@@ -219,7 +219,7 @@
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "List of absolute paths to sound files (.wav/.mp3/.aiff). Leave empty to use the bundled sound. Add multiple files and set soundMode to 'random' to rotate through them. Use 'Agent Bell: Manage Sounds' from the Command Palette for an easier UI."
+          "description": "List of absolute paths to sound files (.wav/.mp3/.aiff/.ogg/.flac). Leave empty to use the bundled sound. Add multiple files and set soundMode to 'random' to rotate through them. Use 'Notification Bell: Manage Sounds' from the Command Palette for an easier UI."
         },
         "agentConfirmSound.soundMode": {
           "type": "string",
