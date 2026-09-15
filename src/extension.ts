@@ -1027,10 +1027,14 @@ export function activate(context: vscode.ExtensionContext) {
             summary = `Claude Code — ${r.detail}`;
             copyText = HOOK_EVENT_LABELS[r.detail] ?? r.detail;
           } else if (r.type === 'command-end') {
-             const failed = r.detail.includes('exit') && !/exit 0/.test(r.detail);
-             icon = failed ? '$(error)' : '$(check)';
-             summary = `Command ${failed ? 'failed' : 'done'} — ${r.source}`;
-             copyText = r.detail;
+            // 'exit ?' means shell integration didn't report a code — neither success nor failure.
+            const exitMatch = r.detail.match(/exit (\d+|\?)/);
+            const exitCode = exitMatch ? exitMatch[1] : null;
+            const failed = exitCode !== null && exitCode !== '0' && exitCode !== '?';
+            const unknown = exitCode === '?';
+            icon = failed ? '$(error)' : unknown ? '$(warning)' : '$(check)';
+            summary = `Command ${failed ? 'failed' : unknown ? 'ended' : 'done'} — ${r.source}`;
+            copyText = r.detail;
           } else {
             summary = `Pattern match — ${r.source}`;
             copyText = r.detail;
