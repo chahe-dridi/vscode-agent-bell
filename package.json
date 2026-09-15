@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -219,7 +219,7 @@
           "type": "array",
           "items": { "type": "string" },
           "default": [],
-          "description": "List of absolute paths to sound files (.wav/.mp3/.aiff). Leave empty to use the bundled sound. Add multiple files and set soundMode to 'random' to rotate through them. Use 'Agent Bell: Manage Sounds' from the Command Palette for an easier UI."
+          "description": "List of absolute paths to sound files (.wav/.mp3/.aiff/.ogg/.flac). Leave empty to use the bundled sound. Add multiple files and set soundMode to 'random' to rotate through them. Use 'Notification Bell: Manage Sounds' from the Command Palette for an easier UI."
         },
         "agentConfirmSound.soundMode": {
           "type": "string",

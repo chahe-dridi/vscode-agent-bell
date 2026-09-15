@@ -26,6 +26,7 @@ interface AlertRecord {
 }
 const MAX_HISTORY = 100;
 const alertHistory: AlertRecord[] = [];
+let sessionAlertCount = 0;
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -38,6 +39,7 @@ function relativeTime(ts: number): string {
 function addAlert(record: AlertRecord) {
   alertHistory.unshift(record);
   if (alertHistory.length > MAX_HISTORY) { alertHistory.length = MAX_HISTORY; }
+  sessionAlertCount++;
   extensionContext.globalState.update('alertHistory', alertHistory);
   updateStatusBar();
 }
@@ -524,7 +526,7 @@ function updateStatusBar() {
   if (flashTimer) {
     return;
   }
-  const count = alertHistory.length;
+  const count = sessionAlertCount;
   const filter = getConfig().get<string[]>('terminalNameFilter', []);
   const filterLabel = filter.length > 0
     ? `watching: ${filter.join(', ')} only`
@@ -590,6 +592,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Restore persisted history from previous session.
   const saved = context.globalState.get<AlertRecord[]>('alertHistory', []);
   alertHistory.push(...saved.slice(0, MAX_HISTORY));
+  sessionAlertCount = 0;
 
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -100);
   statusBarItem.command = 'agentConfirmSound.showHistory';
@@ -872,7 +875,7 @@ export function activate(context: vscode.ExtensionContext) {
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
         items.push({
           label: '$(add) Add sound file…',
-          description: 'Browse for .wav / .mp3 / .aiff',
+          description: 'Browse for .wav / .mp3 / .aiff / .ogg / .flac',
         });
         items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
         items.push({
@@ -1027,10 +1030,14 @@ export function activate(context: vscode.ExtensionContext) {
             summary = `Claude Code — ${r.detail}`;
             copyText = HOOK_EVENT_LABELS[r.detail] ?? r.detail;
           } else if (r.type === 'command-end') {
-             const failed = r.detail.includes('exit') && !/exit 0/.test(r.detail);
-             icon = failed ? '$(error)' : '$(check)';
-             summary = `Command ${failed ? 'failed' : 'done'} — ${r.source}`;
-             copyText = r.detail;
+            // 'exit ?' means shell integration didn't report a code — neither success nor failure.
+            const exitMatch = r.detail.match(/exit (\d+|\?)/);
+            const exitCode = exitMatch ? exitMatch[1] : null;
+            const failed = exitCode !== null && exitCode !== '0' && exitCode !== '?';
+            const unknown = exitCode === '?';
+            icon = failed ? '$(error)' : unknown ? '$(warning)' : '$(check)';
+            summary = `Command ${failed ? 'failed' : unknown ? 'ended' : 'done'} — ${r.source}`;
+            copyText = r.detail;
           } else {
             summary = `Pattern match — ${r.source}`;
             copyText = r.detail;

@@ -189,7 +189,7 @@ Open the Command Palette (`Ctrl+Shift+P`) and type "Notification Bell":
 | `Notification Bell: Set Up Claude Code Integration` | Install Stop + Notification hooks into `~/.claude/settings.json`. |
 | `Notification Bell: Remove Claude Code Integration` | Remove hooks and delete the copied sound file. Run before uninstalling. |
 | `Notification Bell: Manage Sounds` | Switch between bundled sounds, add custom files, toggle random mode. |
-| `Notification Bell: Add Sound File` | Browse and add a custom sound file (.wav / .mp3 / .aiff). |
+| `Notification Bell: Add Sound File` | Browse and add a custom sound file (.wav / .mp3 / .aiff / .ogg / .flac). |
 | `Notification Bell: Show Alert History` | View the last 50 alerts this session — time, source, and what triggered each. |
 | `Notification Bell: Reset to Defaults` | Reset all Notification Bell settings to their defaults. |
 
@@ -212,7 +212,7 @@ Open Settings (`Ctrl+,`) and search **"Notification Bell"**, or add to `settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `agentConfirmSound.sounds` | `[]` | List of custom sound file paths. Empty = use bundled sound. |
+| `agentConfirmSound.sounds` | `[]` | List of custom sound file paths (.wav / .mp3 / .aiff, plus .ogg / .flac on Linux via paplay). Empty = use bundled sound. |
 | `agentConfirmSound.soundMode` | `"fixed"` | `"fixed"` uses the first sound. `"random"` picks one at random each alert. |
 | `agentConfirmSound.volume` | `1` | Volume 0–1. Applied via afplay (macOS), paplay (Linux), WAV sample scaling (Windows). |
 
