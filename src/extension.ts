@@ -26,6 +26,7 @@ interface AlertRecord {
 }
 const MAX_HISTORY = 100;
 const alertHistory: AlertRecord[] = [];
+let sessionAlertCount = 0;
 
 function relativeTime(ts: number): string {
   const diff = Date.now() - ts;
@@ -38,6 +39,7 @@ function relativeTime(ts: number): string {
 function addAlert(record: AlertRecord) {
   alertHistory.unshift(record);
   if (alertHistory.length > MAX_HISTORY) { alertHistory.length = MAX_HISTORY; }
+  sessionAlertCount++;
   extensionContext.globalState.update('alertHistory', alertHistory);
   updateStatusBar();
 }
@@ -524,7 +526,7 @@ function updateStatusBar() {
   if (flashTimer) {
     return;
   }
-  const count = alertHistory.length;
+  const count = sessionAlertCount;
   const filter = getConfig().get<string[]>('terminalNameFilter', []);
   const filterLabel = filter.length > 0
     ? `watching: ${filter.join(', ')} only`
@@ -590,6 +592,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Restore persisted history from previous session.
   const saved = context.globalState.get<AlertRecord[]>('alertHistory', []);
   alertHistory.push(...saved.slice(0, MAX_HISTORY));
+  sessionAlertCount = 0;
 
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -100);
   statusBarItem.command = 'agentConfirmSound.showHistory';
