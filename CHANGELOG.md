@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.7] — 2026-09-15
+
+- Fix: **Alert history correctly handles unknown exit codes** — `exit ?` (shell integration couldn't determine the code) now shows `$(warning)` + "Command ended" instead of being incorrectly flagged as "Command failed"; three distinct states: done (exit 0), failed (exit N), ended (exit ?)
+- Fix: **Status bar badge counts only this session's alerts** — the badge and "N alerts this session" tooltip now track a separate in-memory counter that resets on activation, so persisted history from prior sessions no longer inflates the count
+- Fix: **OGG and FLAC listed as supported sound formats** — descriptions in Manage Sounds, `agentConfirmSound.sounds` setting, and README now mention `.ogg` / `.flac` (Linux/paplay only); also fixes stale "Agent Bell: Manage Sounds" reference in setting description
+
 ## [0.5.6] — 2026-09-11
 
 - Fix: **Alert History shows failed commands** — command-end alerts now store the exit code in the detail field (`finished in 12s (exit 1)`); the history quick pick shows `$(error)` and "Command failed" for non-zero exits and `$(check)` and "Command done" for clean exits, making it easy to spot failures at a glance
