@@ -1,0 +1,45 @@
+// Assuming the file is part of a module and already has a function to update the status bar
+
+class StatusBar {
+    constructor() {
+        this.alertHistory = [];
+        this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    }
+
+    updateStatusBar() {
+        const alertCount = this.alertHistory.length;
+        if (alertCount > 0) {
+            const lastAlert = this.alertHistory[0];
+            const lastAlertDetail = `Last: ${lastAlert.type} · "${lastAlert.source}" · ${this.getTimeAgo(lastAlert.timestamp)}`;
+            this.statusBarItem.tooltip = `Notification Bell — ${alertCount} alerts this session\n${lastAlertDetail}`;
+        } else {
+            this.statusBarItem.tooltip = 'Notification Bell — No alerts this session';
+        }
+        this.statusBarItem.text = `🔔 ${alertCount}`;
+        this.statusBarItem.show();
+    }
+
+    getTimeAgo(timestamp) {
+        const now = new Date().getTime();
+        const diff = now - timestamp;
+        const minutes = Math.floor(diff / (1000 * 60));
+        if (minutes < 60) {
+            return `${minutes}m ago`;
+        } else {
+            const hours = Math.floor(minutes / 60);
+            return `${hours}h ago`;
+        }
+    }
+
+    addAlert(alert) {
+        this.alertHistory.push(alert);
+        this.updateStatusBar();
+    }
+
+    clearAlerts() {
+        this.alertHistory = [];
+        this.updateStatusBar();
+    }
+}
+
+module.exports = StatusBar;
