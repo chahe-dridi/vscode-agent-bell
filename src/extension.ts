@@ -793,8 +793,20 @@ export function activate(context: vscode.ExtensionContext) {
         );
         if (confirm !== 'Disable all') { return; }
       }
+      type ScopeItem = vscode.QuickPickItem & { value: vscode.ConfigurationTarget };
+      const scope = await vscode.window.showQuickPick<ScopeItem>([
+        {
+          label: 'All workspaces (global)',
+          value: vscode.ConfigurationTarget.Global,
+        },
+        {
+          label: 'This workspace only',
+          value: vscode.ConfigurationTarget.Workspace,
+        },
+      ], { title: 'Apply to…' });
+      if (scope === undefined) { return; }
       const newValue = (selected as TriggerItem[]).map((i) => i.value);
-      await getConfig().update('alertOn', newValue, vscode.ConfigurationTarget.Global);
+      await getConfig().update('alertOn', newValue, scope.value);
       vscode.window.showInformationMessage(
         newValue.length === 0
           ? 'Notification Bell: all alert triggers disabled.'
