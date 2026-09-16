@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.8] — 2026-09-16
+
+- Add: **Per-workspace alert trigger scope** — "Configure Alert Triggers" now asks whether the selected mode should apply to all workspaces (global) or only the current workspace; cancelling any step leaves the existing config untouched
+
 ## [0.5.7] — 2026-09-15
 
 - Fix: **Alert history correctly handles unknown exit codes** — `exit ?` (shell integration couldn't determine the code) now shows `$(warning)` + "Command ended" instead of being incorrectly flagged as "Command failed"; three distinct states: done (exit 0), failed (exit N), ended (exit ?)
