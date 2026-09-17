@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.10] — 2026-09-17
+
+- Add: **Gear icon in status bar** — a `$(gear)` button appears next to the bell in the status bar; clicking it opens the Settings Panel directly without going through the Command Palette
+
 ## [0.5.9] — 2026-09-17
 
 - Add: **Settings Panel** — new "Notification Bell: Open Settings Panel" command opens a rich webview UI showing volume pills (click to change instantly), auto-mute when focused toggle, min task duration, and per-event sound status with Preview / Change actions

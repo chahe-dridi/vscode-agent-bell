@@ -602,6 +602,13 @@ export function activate(context: vscode.ExtensionContext) {
   statusBarItem.command = 'agentConfirmSound.showHistory';
   statusBarItem.show();
 
+  const gearItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, -101);
+  gearItem.text = '$(gear)';
+  gearItem.command = 'agentConfirmSound.openPanel';
+  gearItem.tooltip = 'Notification Bell — Open Settings Panel';
+  gearItem.show();
+  context.subscriptions.push(gearItem);
+
   setWatching(getConfig().get<boolean>('enabled', true));
 
   // Migrate existing hooks to the latest command format on startup and start
