@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.9] — 2026-09-17
+
+- Add: **Settings Panel** — new "Notification Bell: Open Settings Panel" command opens a rich webview UI showing volume pills (click to change instantly), auto-mute when focused toggle, min task duration, and per-event sound status with Preview / Change actions
+- Add: **Auto-mute when focused** — new `agentConfirmSound.muteWhenFocused` setting suppresses alert sounds when VS Code is the active window (status bar flash and history still record); also available as a toggle in the Settings Panel
+
 ## [0.5.8] — 2026-09-16
 
 - Add: **Per-workspace alert trigger scope** — "Configure Alert Triggers" now asks whether the selected mode should apply to all workspaces (global) or only the current workspace; cancelling any step leaves the existing config untouched

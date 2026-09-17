@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -107,6 +107,11 @@
         "command": "agentConfirmSound.configureAlertTriggers",
         "title": "Configure Alert Triggers",
         "category": "Notification Bell"
+      },
+      {
+        "command": "agentConfirmSound.openPanel",
+        "title": "Open Settings Panel",
+        "category": "Notification Bell"
       }
     ],
     "configuration": {
@@ -209,6 +214,11 @@
           "default": 3,
           "minimum": 1,
           "description": "Maximum number of reminders to fire before stopping. Only applies when reminderIntervalMs > 0."
+        },
+        "agentConfirmSound.muteWhenFocused": {
+          "type": "boolean",
+          "default": false,
+          "description": "Suppress alert sounds when VS Code is the active foreground window. Status bar flash and history recording still happen — only the sound is skipped. Useful in quiet environments where you are actively watching the terminal."
         },
         "agentConfirmSound.debugLog": {
           "type": "boolean",
