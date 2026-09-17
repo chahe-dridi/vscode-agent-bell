@@ -267,6 +267,10 @@ function playSound(soundFile: string) {
 }
 
 function triggerSound(context: vscode.ExtensionContext) {
+  if (getConfig().get<boolean>('muteWhenFocused', false) && vscode.window.state.focused) {
+    outputChannel.appendLine('[info] sound suppressed — VS Code is focused (muteWhenFocused)');
+    return;
+  }
   playSound(pickSoundFile(context));
 }
 
@@ -1138,6 +1142,7 @@ export function activate(context: vscode.ExtensionContext) {
         'agentConfirmSound.commandEndMinDurationMs',
         'agentConfirmSound.osNotification',
         'agentConfirmSound.hookPreToolUse',
+        'agentConfirmSound.muteWhenFocused',
         'agentConfirmSound.reminderIntervalMs',
         'agentConfirmSound.reminderMaxCount',
         'agentConfirmSound.debugLog',
@@ -1146,12 +1151,247 @@ export function activate(context: vscode.ExtensionContext) {
         await config.update(key, undefined, vscode.ConfigurationTarget.Global);
       }
       vscode.window.showInformationMessage('Notification Bell: settings reset to defaults.');
-    })
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.openPanel', () => {
+      openSettingsPanel(context);
+    }),
   );
 
   outputChannel.appendLine(`[info] Notification Bell ${context.extension.packageJSON.version} activated. Watching: ${watching}`);
   outputChannel.appendLine(`[info] Claude Code hook: ${isHookInstalled() ? 'installed' : 'not installed'}`);
   outputChannel.appendLine(`[info] Sound mode: ${getConfig().get('soundMode', 'fixed')} | Sounds: ${getConfig().get<string[]>('sounds', []).length} custom`);
+}
+
+// ─── Settings panel (webview) ─────────────────────────────────────────────────
+
+let settingsPanel: vscode.WebviewPanel | undefined;
+
+function openSettingsPanel(context: vscode.ExtensionContext) {
+  if (settingsPanel) {
+    settingsPanel.reveal();
+    return;
+  }
+  settingsPanel = vscode.window.createWebviewPanel(
+    'agentConfirmSoundPanel',
+    'Notification Bell',
+    vscode.ViewColumn.One,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  settingsPanel.onDidDispose(() => { settingsPanel = undefined; });
+  settingsPanel.webview.html = buildPanelHtml(context);
+
+  settingsPanel.webview.onDidReceiveMessage(async (msg) => {
+    const cfg = getConfig();
+    switch (msg.command) {
+      case 'setVolume':
+        await cfg.update('volume', msg.value, vscode.ConfigurationTarget.Global);
+        refreshPanel(context);
+        break;
+      case 'setMuteWhenFocused':
+        await cfg.update('muteWhenFocused', msg.value, vscode.ConfigurationTarget.Global);
+        refreshPanel(context);
+        break;
+      case 'setMinDuration':
+        await cfg.update('commandEndMinDurationMs', msg.value, vscode.ConfigurationTarget.Global);
+        refreshPanel(context);
+        break;
+      case 'previewSound':
+        triggerSound(context);
+        break;
+      case 'openSettings':
+        vscode.commands.executeCommand('workbench.action.openSettings', 'agentConfirmSound');
+        break;
+    }
+  }, undefined, context.subscriptions);
+
+  // Refresh panel when settings change externally.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('agentConfirmSound') && settingsPanel) {
+        settingsPanel.webview.html = buildPanelHtml(context);
+      }
+    })
+  );
+}
+
+function refreshPanel(context: vscode.ExtensionContext) {
+  if (settingsPanel) { settingsPanel.webview.html = buildPanelHtml(context); }
+}
+
+function buildPanelHtml(context: vscode.ExtensionContext): string {
+  const cfg = getConfig();
+  const volume      = cfg.get<number>('volume', 1);
+  const volPct      = Math.round(volume * 100);
+  const minDurMs    = cfg.get<number>('commandEndMinDurationMs', 3000);
+  const minDurLabel = minDurMs === 0 ? 'off' : minDurMs < 1000 ? `${minDurMs}ms` : `${minDurMs / 1000}s`;
+  const muted       = cfg.get<boolean>('muteWhenFocused', false);
+  const alertOn     = getAlertOn();
+  const soundName   = path.basename(pickSoundFile(context));
+  const hookInstalled = isHookInstalled();
+
+  const volSteps = [0, 25, 50, 75, 100, 150, 200];
+
+  const volPills = volSteps.map(v => {
+    const active = volPct === v;
+    return `<button class="pill${active ? ' active' : ''}" onclick="send('setVolume', ${v / 100})">${active ? '✓ ' : ''}${v}%</button>`;
+  }).join('');
+
+  const events = [
+    { label: 'Confirmation prompt', icon: '❓', enabled: alertOn.includes('confirmation') },
+    { label: 'Task completed',      icon: '✅', enabled: alertOn.includes('completion') },
+    { label: 'Claude Code hook',    icon: '☁️',  enabled: hookInstalled },
+  ];
+
+  const eventRows = events.map(e => `
+    <div class="event-row">
+      <span class="event-icon">${e.icon}</span>
+      <span class="event-label">${e.label}</span>
+      <span class="event-sound">${e.enabled ? soundName : '<em>disabled</em>'}</span>
+      ${e.enabled ? `<button class="link-btn" onclick="send('previewSound')">▷ Preview</button>` : ''}
+      <button class="link-btn" onclick="send('openSettings')">› Change</button>
+    </div>`).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+    padding: 20px 24px;
+    max-width: 480px;
+  }
+  h1 {
+    font-size: 1em;
+    font-weight: 600;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: ${watching ? '#4caf50' : '#f44336'};
+  }
+  .section { margin-bottom: 18px; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .row-label {
+    font-weight: 600;
+    min-width: 160px;
+    color: var(--vscode-foreground);
+  }
+  .pill {
+    background: var(--vscode-button-secondaryBackground, #3c3c3c);
+    color: var(--vscode-button-secondaryForeground, #cccccc);
+    border: 1px solid var(--vscode-widget-border, #454545);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 0.85em;
+    cursor: pointer;
+  }
+  .pill:hover { background: var(--vscode-button-secondaryHoverBackground, #505050); }
+  .pill.active {
+    background: var(--vscode-button-background, #0e639c);
+    color: var(--vscode-button-foreground, #fff);
+    border-color: transparent;
+  }
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--vscode-textLink-foreground, #4fc1ff);
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 0 4px;
+  }
+  .link-btn:hover { text-decoration: underline; }
+  .toggle {
+    appearance: none;
+    width: 32px; height: 16px;
+    background: var(--vscode-input-background, #3c3c3c);
+    border: 1px solid var(--vscode-widget-border, #454545);
+    border-radius: 8px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .toggle:checked { background: var(--vscode-button-background, #0e639c); border-color: transparent; }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    background: #fff;
+    border-radius: 50%;
+    top: 1px; left: 1px;
+    transition: transform 0.15s;
+  }
+  .toggle:checked::after { transform: translateX(16px); }
+  .events-title { font-weight: 600; margin-bottom: 10px; }
+  .event-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--vscode-widget-border, #2a2a2a);
+  }
+  .event-icon { font-size: 1em; width: 20px; }
+  .event-label { font-weight: 500; flex: 1; }
+  .event-sound { color: var(--vscode-descriptionForeground, #858585); font-size: 0.88em; }
+  .footer { margin-top: 20px; }
+  hr { border: none; border-top: 1px solid var(--vscode-widget-border, #2a2a2a); margin: 16px 0; }
+</style>
+</head>
+<body>
+<h1>
+  <span class="status-dot"></span>
+  Notification Bell — Sound ${watching ? 'ON' : 'OFF'}
+</h1>
+
+<div class="section">
+  <div class="row">
+    <span class="row-label">Volume:</span>
+    ${volPills}
+  </div>
+  <div class="row">
+    <span class="row-label">Min task duration:</span>
+    <span>${minDurLabel}</span>
+    <button class="link-btn" onclick="send('openSettings')">Change…</button>
+  </div>
+  <div class="row">
+    <span class="row-label">Auto-mute when focused:</span>
+    <input type="checkbox" class="toggle" ${muted ? 'checked' : ''} onchange="send('setMuteWhenFocused', this.checked)">
+    <span style="font-size:0.88em;color:var(--vscode-descriptionForeground)">${muted ? 'On' : 'Off'}</span>
+  </div>
+</div>
+
+<hr>
+
+<div class="section">
+  <div class="events-title">Events</div>
+  ${eventRows}
+</div>
+
+<div class="footer">
+  <button class="link-btn" style="font-size:0.9em" onclick="send('openSettings')">⚙ Open full settings</button>
+</div>
+
+<script>
+  const vscode = acquireVsCodeApi();
+  function send(command, value) { vscode.postMessage({ command, value }); }
+</script>
+</body>
+</html>`;
 }
 
 async function watchExecution(
