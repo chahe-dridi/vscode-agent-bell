@@ -1,0 +1,151 @@
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev, master]
+
+jobs:
+  # ── 1. TypeScript compile ────────────────────────────────────────────────────
+  compile:
+    name: TypeScript compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run compile
+
+  # ── 2. Code quality ──────────────────────────────────────────────────────────
+  quality:
+    name: Code quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No dist/ files tracked
+        run: |
+          if git ls-files dist/ | grep -q .; then
+            echo "dist/ files are committed — remove with: git rm --cached dist/*"
+            exit 1
+          fi
+          echo "OK: no dist/ files tracked"
+
+      - name: No console.log in source
+        run: |
+          if grep -rn "console\.log" src/; then
+            echo "Use outputChannel.appendLine() instead of console.log"
+            exit 1
+          fi
+          echo "OK: no console.log"
+
+      - name: No unexpected network calls
+        run: |
+          if grep -rEn "\bfetch\(|require\(['\"]https?['\"]|require\(['\"]axios['\"]|from ['\"]axios['\"]|from ['\"]node-fetch['\"]" src/; then
+            echo "Network call detected — this extension must be fully local"
+            exit 1
+          fi
+          echo "OK: no network calls"
+
+      - name: No runtime dependencies
+        run: |
+          DEPS=$(node -e "const p=require('./package.json');console.log(Object.keys(p.dependencies||{}).length)")
+          if [ "$DEPS" -gt 0 ]; then
+            echo "Runtime dependencies found — use devDependencies only:"
+            node -e "console.log(Object.keys(require('./package.json').dependencies||{}))"
+            exit 1
+          fi
+          echo "OK: zero runtime dependencies"
+
+  # ── 3. Security audit ────────────────────────────────────────────────────────
+  security:
+    name: Security audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: npm audit
+        run: npm audit --audit-level=moderate
+
+  # ── 4. PR-only checks ────────────────────────────────────────────────────────
+  pr-checks:
+    name: PR checks
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Version bumped
+        run: |
+          BASE_VER=$(git show origin/${BASE_REF}:package.json | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>process.stdout.write(JSON.parse(d).version))")
+          HEAD_VER=$(node -e "process.stdout.write(require('./package.json').version)")
+          if [ "$BASE_VER" = "$HEAD_VER" ]; then
+            echo "Version not bumped — still at $HEAD_VER (same as $BASE_REF)"
+            exit 1
+          fi
+          echo "OK: version $BASE_VER -> $HEAD_VER"
+
+      - name: CHANGELOG entry exists
+        run: |
+          VERSION=$(node -e "process.stdout.write(require('./package.json').version)")
+          if ! grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            echo "No CHANGELOG.md entry for v$VERSION"
+            exit 1
+          fi
+          echo "OK: CHANGELOG entry found for v$VERSION"
+
+      - name: Lock file in sync
+        run: |
+          PKG=$(git diff origin/${BASE_REF}...HEAD --name-only | grep -c "^package\.json$" || true)
+          LOCK=$(git diff origin/${BASE_REF}...HEAD --name-only | grep -c "^package-lock\.json$" || true)
+          if [ "$PKG" -gt 0 ] && [ "$LOCK" -eq 0 ]; then
+            echo "package.json changed but package-lock.json was not updated"
+            exit 1
+          fi
+          echo "OK: lock file consistent"
+
+      - name: No breaking changes
+        run: |
+          node -e "
+            const { execSync } = require('child_process');
+            const base = JSON.parse(execSync('git show origin/' + process.env.BASE_REF + ':package.json').toString());
+            const head = require('./package.json');
+            const baseCommands = (base.contributes?.commands || []).map(c => c.command);
+            const headCommands = (head.contributes?.commands || []).map(c => c.command);
+            const baseSettings = Object.keys(base.contributes?.configuration?.properties || {});
+            const headSettings = Object.keys(head.contributes?.configuration?.properties || {});
+            const removedCmds = baseCommands.filter(c => !headCommands.includes(c));
+            const removedSettings = baseSettings.filter(s => !headSettings.includes(s));
+            if (removedCmds.length) { console.error('Removed commands (breaking):', removedCmds.join(', ')); process.exit(1); }
+            if (removedSettings.length) { console.error('Removed settings (breaking):', removedSettings.join(', ')); process.exit(1); }
+            console.log('OK: no breaking changes');
+          "
+
+      - name: VSIX size budget (max 2 MB)
+        run: |
+          npm run package
+          SIZE=$(wc -c < dist/*.vsix)
+          MAX=2097152
+          echo "VSIX size: $((SIZE / 1024)) KB / $((MAX / 1024)) KB limit"
+          if [ "$SIZE" -gt "$MAX" ]; then
+            echo "VSIX exceeds 2 MB budget"
+            exit 1
+          fi
+          echo "OK: size within budget"
