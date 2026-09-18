@@ -1160,8 +1160,18 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Notification Bell: settings reset to defaults.');
     }),
     vscode.commands.registerCommand('agentConfirmSound.openPanel', () => {
-      openSettingsPanel(context);
+      vscode.commands.executeCommand('agentConfirmSound.settingsView.focus');
     }),
+  );
+
+  const settingsProvider = new SettingsViewProvider(context);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(SettingsViewProvider.viewType, settingsProvider, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('agentConfirmSound')) { settingsProvider.refresh(); }
+    })
   );
 
   outputChannel.appendLine(`[info] Notification Bell ${context.extension.packageJSON.version} activated. Watching: ${watching}`);
@@ -1169,60 +1179,51 @@ export function activate(context: vscode.ExtensionContext) {
   outputChannel.appendLine(`[info] Sound mode: ${getConfig().get('soundMode', 'fixed')} | Sounds: ${getConfig().get<string[]>('sounds', []).length} custom`);
 }
 
-// ─── Settings panel (webview) ─────────────────────────────────────────────────
+// ─── Settings panel (webview view — Explorer sidebar) ─────────────────────────
 
-let settingsPanel: vscode.WebviewPanel | undefined;
+class SettingsViewProvider implements vscode.WebviewViewProvider {
+  static readonly viewType = 'agentConfirmSound.settingsView';
+  private _view?: vscode.WebviewView;
 
-function openSettingsPanel(context: vscode.ExtensionContext) {
-  if (settingsPanel) {
-    settingsPanel.reveal();
-    return;
-  }
-  settingsPanel = vscode.window.createWebviewPanel(
-    'agentConfirmSoundPanel',
-    'Notification Bell',
-    vscode.ViewColumn.One,
-    { enableScripts: true, retainContextWhenHidden: true }
-  );
-  settingsPanel.onDidDispose(() => { settingsPanel = undefined; });
-  settingsPanel.webview.html = buildPanelHtml(context);
+  constructor(private readonly ctx: vscode.ExtensionContext) {}
 
-  settingsPanel.webview.onDidReceiveMessage(async (msg) => {
-    const cfg = getConfig();
-    switch (msg.command) {
-      case 'setVolume':
-        await cfg.update('volume', msg.value, vscode.ConfigurationTarget.Global);
-        refreshPanel(context);
-        break;
-      case 'setMuteWhenFocused':
-        await cfg.update('muteWhenFocused', msg.value, vscode.ConfigurationTarget.Global);
-        refreshPanel(context);
-        break;
-      case 'setMinDuration':
-        await cfg.update('commandEndMinDurationMs', msg.value, vscode.ConfigurationTarget.Global);
-        refreshPanel(context);
-        break;
-      case 'previewSound':
-        triggerSound(context);
-        break;
-      case 'openSettings':
-        vscode.commands.executeCommand('workbench.action.openSettings', 'agentConfirmSound');
-        break;
-    }
-  }, undefined, context.subscriptions);
+  resolveWebviewView(view: vscode.WebviewView) {
+    this._view = view;
+    view.webview.options = { enableScripts: true };
+    view.webview.html = buildPanelHtml(this.ctx);
 
-  // Refresh panel when settings change externally.
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('agentConfirmSound') && settingsPanel) {
-        settingsPanel.webview.html = buildPanelHtml(context);
+    view.onDidChangeVisibility(() => {
+      if (view.visible) { view.webview.html = buildPanelHtml(this.ctx); }
+    });
+
+    view.webview.onDidReceiveMessage(async (msg) => {
+      const cfg = getConfig();
+      switch (msg.command) {
+        case 'setVolume':
+          await cfg.update('volume', msg.value, vscode.ConfigurationTarget.Global);
+          this.refresh();
+          break;
+        case 'setMuteWhenFocused':
+          await cfg.update('muteWhenFocused', msg.value, vscode.ConfigurationTarget.Global);
+          this.refresh();
+          break;
+        case 'setMinDuration':
+          await cfg.update('commandEndMinDurationMs', msg.value, vscode.ConfigurationTarget.Global);
+          this.refresh();
+          break;
+        case 'previewSound':
+          triggerSound(this.ctx);
+          break;
+        case 'openSettings':
+          vscode.commands.executeCommand('workbench.action.openSettings', 'agentConfirmSound');
+          break;
       }
-    })
-  );
-}
+    }, undefined, this.ctx.subscriptions);
+  }
 
-function refreshPanel(context: vscode.ExtensionContext) {
-  if (settingsPanel) { settingsPanel.webview.html = buildPanelHtml(context); }
+  refresh() {
+    if (this._view?.visible) { this._view.webview.html = buildPanelHtml(this.ctx); }
+  }
 }
 
 function buildPanelHtml(context: vscode.ExtensionContext): string {

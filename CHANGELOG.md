@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.11] — 2026-09-18
+
+- Improve: **Settings panel is now a popup sidebar** — clicking the gear icon (or running "Open Settings Panel") now opens the Notification Bell panel as a collapsible section in the Explorer sidebar, not a full editor tab; the panel stays out of your way and can be expanded/collapsed like any sidebar section
+
 ## [0.5.10] — 2026-09-17
 
 - Add: **Gear icon in status bar** — a `$(gear)` button appears next to the bell in the status bar; clicking it opens the Settings Panel directly without going through the Command Palette
