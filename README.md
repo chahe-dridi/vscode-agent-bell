@@ -9,14 +9,15 @@
 [![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/chahe-dridi.agent-confirm-sound?label=Marketplace&color=0078d4&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=chahe-dridi.agent-confirm-sound)
 [![Installs](https://img.shields.io/visual-studio-marketplace/i/chahe-dridi.agent-confirm-sound?color=brightgreen)](https://marketplace.visualstudio.com/items?itemName=chahe-dridi.agent-confirm-sound)
 [![Rating](https://img.shields.io/visual-studio-marketplace/r/chahe-dridi.agent-confirm-sound?color=yellow)](https://marketplace.visualstudio.com/items?itemName=chahe-dridi.agent-confirm-sound)
+[![CI](https://github.com/chahe-dridi/vscode-agent-bell/actions/workflows/ci.yml/badge.svg)](https://github.com/chahe-dridi/vscode-agent-bell/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.txt)
 [![GitHub Stars](https://img.shields.io/github/stars/chahe-dridi/vscode-agent-bell?style=social)](https://github.com/chahe-dridi/vscode-agent-bell)
 
 Plays a sound and sends an OS notification the moment your AI agent needs attention — whether it's waiting for confirmation, asking to run a command, or finished its turn.
 
-Works with **Claude Code**, **aider**, **Gemini CLI**, **Codex CLI**, **Cursor CLI**, and any other terminal-based AI agent.
+Works with **Claude Code**, **aider**, **Gemini CLI**, **Codex CLI**, **Cursor**, and any other terminal-based AI agent.
 
-[**Install**](#installation) · [**Claude Code Setup**](#claude-code-integration) · [**Settings**](#settings) · [**Contributing**](#contributing)
+[**Install**](#installation) · [**Claude Code Setup**](#claude-code-integration) · [**Settings Panel**](#settings-panel) · [**Settings**](#settings) · [**Contributing**](#contributing)
 
 </div>
 
@@ -32,6 +33,7 @@ Works with **Claude Code**, **aider**, **Gemini CLI**, **Codex CLI**, **Cursor C
 - [Terminal Watching (Other Agents)](#terminal-watching-other-agents)
 - [How It Works](#how-it-works)
 - [Features](#features)
+- [Settings Panel](#settings-panel)
 - [Commands](#commands)
 - [Settings](#settings)
 - [Tuning Patterns for Your Agent](#tuning-patterns-for-your-agent)
@@ -49,6 +51,7 @@ Notification Bell closes that gap:
 
 - **Instant audio alert** the moment an agent needs your input
 - **OS notification** so you're notified even when VS Code isn't focused
+- **Focus mode** — keeps the sound but silences OS popups when you don't want banner spam
 - **Status bar badge** `🔔 7` showing how many alerts fired this session
 - **Reminder escalation** — re-alerts every N minutes if you still haven't responded
 - **Zero configuration** required — sensible defaults work out of the box
@@ -87,7 +90,7 @@ code --install-extension chahe-dridi.agent-confirm-sound
 "agentConfirmSound.terminalNameFilter": ["claude"]
 ```
 
-That's it. The bell fires the moment your agent needs you.
+**4. Open the Settings Panel** — click the `⚙` gear icon in the status bar to adjust volume, toggle focus mode, and preview sounds without leaving your workflow.
 
 ---
 
@@ -163,16 +166,37 @@ Other terminal agents (aider, Gemini CLI, scripts, etc.)
 | 🪝 | **Claude Code hook integration** — works without shell integration, even when VS Code is not focused |
 | 🔊 | **Sound alert** on any configurable regex pattern in terminal output |
 | ⏱️ | **Command-end alert** — plays when long-running commands finish (configurable minimum duration) |
-| 🔔 | **Status bar badge** — shows session alert count (`🔔 7`), flashes on alert, click to pause/resume |
+| 🔔 | **Status bar badge** — shows session alert count (`🔔 7`), flashes on alert |
 | 🖥️ | **OS notification** when VS Code is not focused (Windows balloon / macOS notification center / Linux notify-send) |
+| 🎛️ | **Settings panel** — gear icon in status bar opens a panel with volume pills, toggles, and event previews |
+| 🎯 | **Focus mode** — keeps the sound playing but silences OS popup notifications |
+| 🔇 | **Auto-mute when focused** — suppresses sound when VS Code is your active window |
+| ⚡ | **Alert triggers** — choose to alert on confirmations, task completions, or both |
 | ⏰ | **Reminder escalation** — re-alerts after N minutes if you haven't responded |
 | 🎵 | **Two bundled sounds** + support for custom files with random or fixed rotation |
 | 🔉 | **Volume control** on all platforms (afplay / paplay / WAV sample scaling on Windows) |
 | 🔍 | **Terminal name filter** — watch only terminals named "claude" or "aider" |
 | 🧪 | **Pattern tester** — paste terminal output, see which pattern matched, copies regex to clipboard |
-| 📋 | **Alert history** — last 50 alerts with time, source, and trigger |
-| 🛠️ | **Reset to Defaults** command |
+| 📋 | **Alert history** — last 100 alerts with time, source, and trigger, persisted across reloads |
 | 🌍 | **Cross-platform** — macOS, Windows, Linux |
+
+---
+
+## Settings Panel
+
+Click the `⚙` gear icon in the status bar (or run `Notification Bell: Open Settings Panel`) to open the settings panel in the bottom panel area — the same area as Terminal and Output.
+
+The panel gives you quick access to the most common settings without opening `settings.json`:
+
+| Control | What it does |
+|---|---|
+| **Volume pills** | Click any percentage to change volume instantly (0% – 200%) |
+| **Auto-mute when focused** | Toggle — suppresses sound while VS Code is your active window |
+| **Focus mode** | Toggle — keeps the sound but hides OS popup notifications |
+| **Min task duration** | How long a command must run before "task done" fires |
+| **Events section** | Shows which sound plays for each event type with Preview / Change buttons |
+
+Every row in the panel has an `!` info badge — hover it to see a plain-language description of what the setting does.
 
 ---
 
@@ -182,7 +206,7 @@ Open the Command Palette (`Ctrl+Shift+P`) and type "Notification Bell":
 
 | Command | Description |
 |---|---|
-| `Notification Bell: Toggle Watching` | Pause or resume terminal watching. Also available via status bar click. |
+| `Notification Bell: Toggle Watching` | Pause or resume terminal watching. |
 | `Notification Bell: Play Test Sound` | Play the alert sound immediately to verify audio is working. |
 | `Notification Bell: Show Log` | Open the output channel for match logs and debug info. |
 | `Notification Bell: Test Pattern` | Enter terminal output — see which pattern matched and copies the regex to clipboard. |
@@ -190,7 +214,10 @@ Open the Command Palette (`Ctrl+Shift+P`) and type "Notification Bell":
 | `Notification Bell: Remove Claude Code Integration` | Remove hooks and delete the copied sound file. Run before uninstalling. |
 | `Notification Bell: Manage Sounds` | Switch between bundled sounds, add custom files, toggle random mode. |
 | `Notification Bell: Add Sound File` | Browse and add a custom sound file (.wav / .mp3 / .aiff / .ogg / .flac). |
-| `Notification Bell: Show Alert History` | View the last 50 alerts this session — time, source, and what triggered each. |
+| `Notification Bell: Show Alert History` | View the last 100 alerts — time, source, and what triggered each. |
+| `Notification Bell: Configure Alert Triggers` | Choose when to alert: confirmations, task completions, or both. Supports per-workspace scope. |
+| `Notification Bell: Open Settings Panel` | Open the settings panel in the bottom panel area. |
+| `Notification Bell: Dismiss Reminder` | Cancel the active reminder escalation immediately. |
 | `Notification Bell: Reset to Defaults` | Reset all Notification Bell settings to their defaults. |
 
 ---
@@ -204,6 +231,7 @@ Open Settings (`Ctrl+,`) and search **"Notification Bell"**, or add to `settings
 | Setting | Default | Description |
 |---|---|---|
 | `agentConfirmSound.enabled` | `true` | Turn terminal watching on/off. |
+| `agentConfirmSound.alertOn` | `["confirmation","completion"]` | When to fire alerts. `confirmation` = agent waiting for y/n or approval. `completion` = command or agent turn finished. Use `Configure Alert Triggers` for an easier picker. |
 | `agentConfirmSound.patterns` | *(see below)* | Case-insensitive regex array matched against terminal output. |
 | `agentConfirmSound.terminalNameFilter` | `[]` | Only watch terminals whose name contains one of these strings. Empty = watch all. |
 | `agentConfirmSound.debounceMs` | `4000` | Minimum ms between alerts per terminal — prevents repeated sounds on the same prompt. |
@@ -212,11 +240,11 @@ Open Settings (`Ctrl+,`) and search **"Notification Bell"**, or add to `settings
 
 | Setting | Default | Description |
 |---|---|---|
-| `agentConfirmSound.sounds` | `[]` | List of custom sound file paths (.wav / .mp3 / .aiff, plus .ogg / .flac on Linux via paplay). Empty = use bundled sound. |
+| `agentConfirmSound.sounds` | `[]` | List of custom sound file paths (.wav / .mp3 / .aiff, plus .ogg / .flac on Linux). Empty = use bundled sound. |
 | `agentConfirmSound.soundMode` | `"fixed"` | `"fixed"` uses the first sound. `"random"` picks one at random each alert. |
-| `agentConfirmSound.volume` | `1` | Volume 0–1. Applied via afplay (macOS), paplay (Linux), WAV sample scaling (Windows). |
+| `agentConfirmSound.volume` | `1` | Volume 0–1 (up to 2 for boost). Applied via afplay (macOS), paplay (Linux), WAV sample scaling (Windows). |
 
-### Alerts
+### Alerts & Notifications
 
 | Setting | Default | Description |
 |---|---|---|
@@ -224,7 +252,9 @@ Open Settings (`Ctrl+,`) and search **"Notification Bell"**, or add to `settings
 | `agentConfirmSound.alertOnCommandEnd` | `true` | Play a sound when any long-running terminal command finishes. |
 | `agentConfirmSound.commandEndMinDurationMs` | `3000` | Minimum command duration (ms) before "command finished" fires. Quick commands like `ls` are ignored. |
 | `agentConfirmSound.osNotification` | `true` | Show an OS-level notification when VS Code is not focused. |
-| `agentConfirmSound.reminderIntervalMs` | `0` | Re-alert after this many ms if you haven't responded. `0` = disabled. |
+| `agentConfirmSound.focusMode` | `false` | Keep the alert sound but suppress OS popup notifications (balloon / banner / notify-send). |
+| `agentConfirmSound.muteWhenFocused` | `false` | Suppress alert sounds while VS Code is your active window. History and status bar still update. |
+| `agentConfirmSound.reminderIntervalMs` | `0` | Re-alert after this many ms if you haven't responded. `0` = disabled. Example: `120000` for 2 minutes. |
 | `agentConfirmSound.reminderMaxCount` | `3` | Maximum number of reminders before stopping. |
 
 ### Claude Code Hook
@@ -249,8 +279,6 @@ Two sounds ship with the extension, selectable from **Notification Bell: Manage 
 |---|---|
 | `notify.wav` | Short, crisp chime (default) |
 | `notification-bell.mp3` | Fuller bell tone |
-
-No configuration needed — open the command and click to switch.
 
 ---
 
@@ -284,8 +312,6 @@ No configuration needed — open the command and click to switch.
 ]
 ```
 
-> Patterns removed for causing false positives: `"approve|reject.*action"` (bare word too broad), `"tool (call|use|request)"` (matched Claude's own log lines), `"run this command"` (matched narration).
-
 ---
 
 ### Common configuration examples
@@ -293,6 +319,16 @@ No configuration needed — open the command and click to switch.
 **Watch only Claude Code terminals:**
 ```json
 "agentConfirmSound.terminalNameFilter": ["claude"]
+```
+
+**Sound on but no popup banners:**
+```json
+"agentConfirmSound.focusMode": true
+```
+
+**Silent when you're actively watching VS Code:**
+```json
+"agentConfirmSound.muteWhenFocused": true
 ```
 
 **Custom sound at half volume:**
@@ -374,3 +410,5 @@ npm run compile
 npm run package
 code --install-extension dist/agent-confirm-sound-<version>.vsix --force
 ```
+
+**CI runs automatically on every PR** and checks that the code compiles, no `dist/` files are committed, no network calls were introduced, the version was bumped, the CHANGELOG was updated, and no commands or settings were removed. Make sure all checks pass before requesting a review.
