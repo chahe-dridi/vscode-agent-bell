@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.13] — 2026-09-18
+
+- Add: **Focus mode** — new toggle in the settings panel (and `agentConfirmSound.focusMode` setting) that keeps alert sounds playing but suppresses OS popup notifications; useful when you can hear the bell but don't want balloon tips / macOS banners cluttering your screen
+- Improve: **Info badges in settings panel** — every setting row now has a `!` badge that shows a plain-language description tooltip on hover, so the panel is self-documenting without opening full settings
+
 ## [0.5.12] — 2026-09-18
 
 - Improve: **Settings panel opens in the bottom panel** — clicking the gear icon now pops up the Notification Bell settings as a tab in the bottom panel area (alongside Terminal / Output / Problems), not as a full editor tab; close it with the panel's × or Ctrl+J like any other panel

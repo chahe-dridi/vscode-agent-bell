@@ -130,6 +130,7 @@ function pickSoundFile(context: vscode.ExtensionContext): string {
 
 function showOsNotification(message: string) {
   if (!getConfig().get<boolean>('osNotification', true)) { return; }
+  if (getConfig().get<boolean>('focusMode', false)) { return; }
   const platform = os.platform();
   if (platform === 'win32') {
     // Single-quoted PS strings are literal — only single-quotes in the message need escaping.
@@ -1150,6 +1151,7 @@ export function activate(context: vscode.ExtensionContext) {
         'agentConfirmSound.osNotification',
         'agentConfirmSound.hookPreToolUse',
         'agentConfirmSound.muteWhenFocused',
+        'agentConfirmSound.focusMode',
         'agentConfirmSound.reminderIntervalMs',
         'agentConfirmSound.reminderMaxCount',
         'agentConfirmSound.debugLog',
@@ -1211,6 +1213,10 @@ class SettingsViewProvider implements vscode.WebviewViewProvider {
           await cfg.update('commandEndMinDurationMs', msg.value, vscode.ConfigurationTarget.Global);
           this.refresh();
           break;
+        case 'setFocusMode':
+          await cfg.update('focusMode', msg.value, vscode.ConfigurationTarget.Global);
+          this.refresh();
+          break;
         case 'previewSound':
           triggerSound(this.ctx);
           break;
@@ -1233,6 +1239,7 @@ function buildPanelHtml(context: vscode.ExtensionContext): string {
   const minDurMs    = cfg.get<number>('commandEndMinDurationMs', 3000);
   const minDurLabel = minDurMs === 0 ? 'off' : minDurMs < 1000 ? `${minDurMs}ms` : `${minDurMs / 1000}s`;
   const muted       = cfg.get<boolean>('muteWhenFocused', false);
+  const focusMode   = cfg.get<boolean>('focusMode', false);
   const alertOn     = getAlertOn();
   const soundName   = path.basename(pickSoundFile(context));
   const hookInstalled = isHookInstalled();
@@ -1333,6 +1340,7 @@ function buildPanelHtml(context: vscode.ExtensionContext): string {
     position: relative;
     cursor: pointer;
     transition: background 0.15s;
+    flex-shrink: 0;
   }
   .toggle:checked { background: var(--vscode-button-background, #0e639c); border-color: transparent; }
   .toggle::after {
@@ -1358,6 +1366,44 @@ function buildPanelHtml(context: vscode.ExtensionContext): string {
   .event-sound { color: var(--vscode-descriptionForeground, #858585); font-size: 0.88em; }
   .footer { margin-top: 20px; }
   hr { border: none; border-top: 1px solid var(--vscode-widget-border, #2a2a2a); margin: 16px 0; }
+  /* Info badge with hover tooltip */
+  .info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px; height: 15px;
+    border-radius: 50%;
+    background: var(--vscode-descriptionForeground, #666);
+    color: var(--vscode-editor-background, #1e1e1e);
+    font-size: 0.65em;
+    font-weight: 800;
+    cursor: help;
+    position: relative;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .info::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--vscode-editorHoverWidget-background, #252526);
+    color: var(--vscode-editorHoverWidget-foreground, #cccccc);
+    border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 0.85em;
+    width: max-content;
+    max-width: 210px;
+    white-space: normal;
+    line-height: 1.4;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+  }
+  .info:hover::after { opacity: 1; }
 </style>
 </head>
 <body>
@@ -1369,17 +1415,26 @@ function buildPanelHtml(context: vscode.ExtensionContext): string {
 <div class="section">
   <div class="row">
     <span class="row-label">Volume:</span>
+    <span class="info" data-tip="Scale the alert volume from 0% (silent) to 200%. Values above 100% boost the WAV digitally.">!</span>
     ${volPills}
   </div>
   <div class="row">
     <span class="row-label">Min task duration:</span>
+    <span class="info" data-tip="Only alert on command-end if the command ran longer than this. Ignores quick commands like ls or cd.">!</span>
     <span>${minDurLabel}</span>
     <button class="link-btn" onclick="send('openSettings')">Change…</button>
   </div>
   <div class="row">
     <span class="row-label">Auto-mute when focused:</span>
+    <span class="info" data-tip="Suppresses the alert sound while VS Code is your active window. History and status bar still update.">!</span>
     <input type="checkbox" class="toggle" ${muted ? 'checked' : ''} onchange="send('setMuteWhenFocused', this.checked)">
     <span style="font-size:0.88em;color:var(--vscode-descriptionForeground)">${muted ? 'On' : 'Off'}</span>
+  </div>
+  <div class="row">
+    <span class="row-label">Focus mode:</span>
+    <span class="info" data-tip="Keeps the sound but hides OS popup notifications (Windows balloon, macOS banner). Useful in quiet environments where you can hear the bell but don't want notification spam.">!</span>
+    <input type="checkbox" class="toggle" ${focusMode ? 'checked' : ''} onchange="send('setFocusMode', this.checked)">
+    <span style="font-size:0.88em;color:var(--vscode-descriptionForeground)">${focusMode ? 'On' : 'Off'}</span>
   </div>
 </div>
 
