@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.12] — 2026-09-18
+
+- Improve: **Settings panel opens in the bottom panel** — clicking the gear icon now pops up the Notification Bell settings as a tab in the bottom panel area (alongside Terminal / Output / Problems), not as a full editor tab; close it with the panel's × or Ctrl+J like any other panel
+
 ## [0.5.11] — 2026-09-18
 
 - Improve: **Settings panel is now a popup sidebar** — clicking the gear icon (or running "Open Settings Panel") now opens the Notification Bell panel as a collapsible section in the Explorer sidebar, not a full editor tab; the panel stays out of your way and can be expanded/collapsed like any sidebar section
