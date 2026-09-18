@@ -114,13 +114,21 @@
         "category": "Notification Bell"
       }
     ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "notification-bell-panel",
+          "title": "Notification Bell",
+          "icon": "icon.png"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "notification-bell-panel": [
         {
           "id": "agentConfirmSound.settingsView",
           "name": "Notification Bell",
-          "type": "webview",
-          "visibility": "collapsed"
+          "type": "webview"
         }
       ]
     },
