@@ -1,6 +1,6 @@
 # Contributing to Notification Bell
 
-Thanks for helping make Notification Bell better. This document covers how to set up the project, how branches work, and where to find good first issues.
+Thanks for helping make Notification Bell better. This document covers how to set up the project, how branches work, what the CI checks, and where to find good first issues.
 
 ---
 
@@ -56,10 +56,34 @@ Ctrl+Shift+P → Notification Bell: Test Pattern
    npm run compile
    ```
 5. Test manually (F5 → Extension Development Host).
-6. Open a PR against **`dev`** with:
-   - A clear title
+6. Bump the version in `package.json` (patch `x.x.N` for fixes, minor `x.N.0` for new features).
+7. Add a `## [x.x.x] — YYYY-MM-DD` entry to `CHANGELOG.md` describing your change.
+8. Open a PR against **`dev`** with:
+   - A clear title using `feat:`, `fix:`, or `chore:` prefix
    - `Fixes #<issue number>` in the body
    - A short description of what you changed and how you tested it
+
+---
+
+## CI checks
+
+Every PR runs the following checks automatically. All must pass before a maintainer will review:
+
+| Check | What it verifies |
+|---|---|
+| **TypeScript compile** | `npm run compile` passes with no errors |
+| **No dist/ files** | `dist/*.vsix` must not be committed — they are gitignored |
+| **No console.log** | Use `outputChannel.appendLine()` instead |
+| **No network calls** | Extension must be fully local — no `fetch`, `http`, `axios`, etc. |
+| **No runtime dependencies** | `package.json` `dependencies` must remain empty |
+| **npm audit** | No known vulnerabilities at moderate severity or above |
+| **Version bumped** | `package.json` version must differ from the base branch |
+| **CHANGELOG entry** | `CHANGELOG.md` must have a `## [x.x.x]` entry matching the new version |
+| **Lock file in sync** | If `package.json` changed, `package-lock.json` must also be updated |
+| **No breaking changes** | Removed commands or settings fail automatically |
+| **VSIX size budget** | Built extension must stay under 2 MB |
+
+**CodeQL** static analysis also runs on every PR to `master` and weekly, checking for injection patterns and unsafe code.
 
 ---
 
@@ -95,9 +119,11 @@ Each new agent type needs:
 ## Code style
 
 - TypeScript, strict mode.
-- No new dependencies — the extension has zero runtime deps intentionally.
+- No new runtime dependencies — the extension has zero intentionally. Dev-only tooling goes in `devDependencies`.
+- Do not commit `dist/` files — they are gitignored. Build locally for testing only.
 - No comments explaining *what* the code does; only *why* if non-obvious.
-- Run `npm run compile` before committing — the CI check will catch type errors.
+- Use `outputChannel.appendLine()` for all logging — never `console.log`.
+- Run `npm run compile` before pushing — the CI will catch type errors but it's faster to catch them locally.
 
 ---
 
@@ -107,6 +133,8 @@ Each new agent type needs:
 npm run package
 code --install-extension dist/agent-confirm-sound-<version>.vsix --force
 ```
+
+The `dist/` folder is gitignored — do not commit the `.vsix` file.
 
 ---
 

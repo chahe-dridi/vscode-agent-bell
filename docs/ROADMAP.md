@@ -1,71 +1,41 @@
-# Agent Bell — Roadmap
+# Notification Bell — Roadmap
 
-Items are sorted by priority. Each completed item gets a ✅ and a version tag.
-When starting a new batch of work, create `docs/WORK-<version>.md` to track what changed.
-
----
-
-## P0 — Quick wins (high value, low effort)
-
-### 1. More Claude Code–specific patterns
-Claude Code renders permission prompts with box-drawing characters and specific phrasing that current patterns miss. Add patterns for:
-- `allow this action`
-- `do you want to proceed`
-- `bash\s+command` tool use prompts
-- Box-drawing lines that appear before a `[y/n]`
-- Claude Code's `> ` input cursor line
-
-**Why chat gets "stuck":** Claude Code's prompt text goes through shell integration fine, but our regex doesn't match its exact phrasing. This is the most likely reason sounds aren't firing during Claude Code sessions.
-
-### 2. Focus triggering terminal on alert
-When a pattern matches, bring the matching terminal to the foreground (`terminal.show()`). Optional setting: `agentConfirmSound.focusTerminal` (default `false`).
-
-### 3. Visual pulse on status bar item
-Flash the status bar item briefly when a sound fires — useful when system audio is low. Use `statusBarItem.color` cycling or a temporary icon swap.
+Items sorted by priority. Completed items are marked ✅ with a version tag.
 
 ---
 
-## P1 — Medium effort, high value
+## Pending
 
-### 4. Pattern tester command
-Command: **Agent Bell: Test Patterns**
-Opens an input box → user pastes a line of terminal output → extension shows which pattern matched (or "no match"). Removes the guesswork when tuning patterns. Logs result to the output channel.
+### P1 — High value
 
-### 5. Repeat alert if not acknowledged
-Setting: `agentConfirmSound.repeatIntervalMs` (default `0` = disabled).
-If set, re-plays the sound every N ms while the terminal is still showing the same prompt (debounce timestamp hasn't been reset by a new execution). Useful when you're in a flow and miss the first ping.
-
-### 6. Desktop (toast) notification
-In addition to sound, show a VS Code information message or native OS toast when triggered. Setting: `agentConfirmSound.showNotification` (default `false`). The message shows the terminal name and matched text snippet.
-
-### 7. Per-pattern sound files
-Allow patterns to map to specific sounds instead of one global sound. Config shape:
+**Per-event sound files**
+Allow different sounds for confirmations vs. completions vs. hook events. Config shape:
 ```json
 "agentConfirmSound.patternSounds": [
-  { "pattern": "allow this action", "soundPath": "/sounds/urgent.wav" },
-  { "pattern": "\\(y/n\\)", "soundPath": "/sounds/soft.wav" }
+  { "event": "confirmation", "soundPath": "/sounds/urgent.wav" },
+  { "event": "completion",   "soundPath": "/sounds/soft.wav" }
 ]
 ```
+Tracked in [#195](https://github.com/chahe-dridi/vscode-agent-bell/issues/195).
 
----
+**Volume above 100% via settings panel slider**
+The panel currently shows volume pills (0–200%) but the VS Code setting clamps to 1.0. Extend the schema to allow up to 2.0 and add a proper range slider in the panel.
+Tracked in [#196](https://github.com/chahe-dridi/vscode-agent-bell/issues/196).
 
-## P2 — Nice to have
+**Min task duration picker in settings panel**
+`commandEndMinDurationMs` currently shows the value with a "Change…" link to full settings. Replace it with inline increment/decrement buttons in the panel.
+Tracked in [#198](https://github.com/chahe-dridi/vscode-agent-bell/issues/198).
 
-### 8. Quiet hours
-Settings: `agentConfirmSound.quietHoursStart` / `quietHoursEnd` (24h format strings, e.g. `"22:00"`).
-No sound fires during this window. Useful when running agents overnight.
+### P2 — Nice to have
 
-### 9. Status bar shows which terminal triggered
-After a match, update the status bar tooltip to show `Last match: <terminal name> at <time>` so you know where to look.
+**Quiet hours**
+Settings: `agentConfirmSound.quietHoursStart` / `quietHoursEnd` (24h strings, e.g. `"22:00"`). No sound fires during this window — useful for overnight agent runs.
 
-### 10. Keyboard shortcut for toggle
+**Keyboard shortcut for toggle**
 Ship a default keybinding for `agentConfirmSound.toggle` (e.g. `Ctrl+Alt+B`). Let users rebind via standard VS Code keybindings.
 
-### 11. Agent auto-detect
-If the terminal name contains `claude`, `aider`, `cursor`, etc., automatically apply a stricter name filter and log which agent is being watched. No config needed.
-
-### 12. Sound cooldown per session
-Instead of per-terminal debounce, add a global cooldown so rapid fires across multiple terminals don't stack up.
+**Sound cooldown per session**
+Global cooldown so rapid fires across multiple terminals don't stack. Separate from per-terminal debounce — affects the combined alert rate.
 
 ---
 
@@ -75,6 +45,34 @@ Instead of per-terminal debounce, add a global cooldown so rapid fires across mu
 |---|---|
 | 0.1.0 | Initial release — sound on pattern match, mute toggle, cross-platform |
 | 0.1.2 | Windows sound fix, memory cleanup, toggle watching, pattern cache |
-| 0.1.3 | Status bar flash, focus terminal option, pattern tester command, more Claude Code patterns |
+| 0.1.3 | Status bar flash on alert, focus terminal option, pattern tester command, more Claude Code patterns |
 | 0.1.4 | Debug log mode to trace terminal chunks |
-| 0.2.0 | Claude Code hook integration — auto-installs Stop hook into ~/.claude/settings.json |
+| 0.2.0 | Claude Code hook integration — auto-installs Stop hook into `~/.claude/settings.json` |
+| 0.2.1 | Notification hook + multi-sound support + Manage Sounds command |
+| 0.2.2 | Status bar to left side, warning color when paused, setup modal remembers decision |
+| 0.2.3 | PreToolUse hook for bash approval workflows |
+| 0.2.4 | Manage Sounds UI overhaul — active indicator, instant switch, volume picker |
+| 0.2.5 | Mute flag synced to hooks, active sound synced to hooks, volume on Windows via WAV scaling |
+| 0.2.6 | Command-end alert (alertOnCommandEnd), OS notification when VS Code unfocused |
+| 0.2.7 | Hook sound sync fix, orphaned command-end fix, commandEndMinDurationMs default 5s → 3s |
+| 0.2.8 | Non-WAV fallback on Windows hook, double-alert fix, temp file race fix, AppleScript escaping |
+| 0.3.0 | Rename to Notification Bell, hook IPC signal file, reminder escalation, alert history (50 entries), AbortController per terminal, WAV header validation |
+| 0.4.0 | notification-bell.mp3 selectable, session alert count badge, new default patterns |
+| 0.4.1 | Reset to Defaults command |
+| 0.4.2 | Test Pattern copies match to clipboard, README overhaul |
+| 0.4.3 | Dismiss Reminder command |
+| 0.4.4 | Linux notify-send missing now logs a warning |
+| 0.5.0 | Configure Alert Triggers — alertOn setting, choose confirmation / completion / both |
+| 0.5.1 | Status bar click opens Alert History instead of toggling |
+| 0.5.2 | Alert history persisted across reloads, capacity 50 → 100, relative time display |
+| 0.5.3 | README/keywords cleanup, Gemini CLI + Codex CLI listed |
+| 0.5.4 | Alert History searchable |
+| 0.5.5 | Status bar tooltip shows active terminal filter, all commands grouped under "Notification Bell" |
+| 0.5.6 | Alert History shows failed commands (exit codes) |
+| 0.5.7 | Unknown exit code (exit ?) shows warning instead of error, session badge fix |
+| 0.5.8 | Configure Alert Triggers — per-workspace scope picker |
+| 0.5.9 | Settings panel webview with volume pills, auto-mute toggle, event rows |
+| 0.5.10 | Gear icon in status bar to open settings panel |
+| 0.5.11 | Settings panel moved to Explorer sidebar (WebviewViewProvider) |
+| 0.5.12 | Settings panel moved to bottom panel area |
+| 0.5.13 | Focus mode (sound on, OS popups off) + info badge tooltips on every panel row |
