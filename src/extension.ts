@@ -170,7 +170,7 @@ function showOsNotification(message: string) {
 // Returns the original buffer unchanged if it is not a standard 16-bit PCM WAV
 // (bad RIFF/WAVE magic, non-PCM format, or non-16-bit depth) or if factor ≈ 1.0.
 function scaleWavBuffer(buf: Buffer, factor: number): Buffer {
-  if (factor >= 0.999) { return buf; }
+  if (Math.abs(factor - 1.0) < 0.001) { return buf; }
   // Validate RIFF/WAVE container header
   if (buf.length < 44) { return buf; }
   if (buf.toString('ascii', 0, 4) !== 'RIFF') { return buf; }
@@ -219,7 +219,7 @@ function buildHookCommand(soundFile: string, hookEvent: string): string {
 }
 
 function playSound(soundFile: string) {
-  const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
+  const volume = Math.max(0, Math.min(2, getConfig().get<number>('volume', 1)));
   const platform = os.platform();
 
   let cmd: string;
@@ -227,30 +227,45 @@ function playSound(soundFile: string) {
   let spawnOpts: cp.SpawnOptions;
 
   if (platform === 'darwin') {
+    // afplay -v clamps at 1.0 natively; for amplification use a value > 1 which afplay supports up to ~4
     cmd = 'afplay';
     args = [soundFile, '-v', String(volume)];
     spawnOpts = { stdio: 'ignore', detached: true };
   } else if (platform === 'win32') {
-    // SoundPlayer has no volume API — scale WAV bytes in memory instead.
-    // Combine timestamp + monotonic counter so concurrent calls can't share the same temp path.
+    const isWav = soundFile.toLowerCase().endsWith('.wav');
     let playPath = soundFile;
-    if (volume < 0.999 && soundFile.toLowerCase().endsWith('.wav')) {
+
+    if (isWav && Math.abs(volume - 1.0) > 0.001) {
+      // Scale WAV samples in-memory — SoundPlayer has no volume API.
       try {
         const raw = fs.readFileSync(soundFile);
         const scaled = scaleWavBuffer(raw, volume);
         const tmp = path.join(os.tmpdir(), `agent-bell-${Date.now()}-${++tempFileCounter}.wav`);
         fs.writeFileSync(tmp, scaled);
         playPath = tmp;
-      } catch { /* fall back to original file */ }
+      } catch { /* fall back to original */ }
     }
-    const psPath = playPath.replace(/'/g, "''");
+
     const isTemp = playPath !== soundFile;
-    cmd = 'powershell';
-    args = ['-NoProfile', '-NonInteractive', '-Command',
-      isTemp
-        ? `(New-Object Media.SoundPlayer '${psPath}').PlaySync(); Remove-Item '${psPath}' -ErrorAction SilentlyContinue`
-        : `(New-Object Media.SoundPlayer '${psPath}').PlaySync()`
-    ];
+    const psPath = playPath.replace(/'/g, "''");
+
+    if (playPath.toLowerCase().endsWith('.wav')) {
+      // WAV: fast synchronous SoundPlayer
+      cmd = 'powershell';
+      args = ['-NoProfile', '-NonInteractive', '-Command',
+        isTemp
+          ? `(New-Object Media.SoundPlayer '${psPath}').PlaySync(); Remove-Item '${psPath}' -ErrorAction SilentlyContinue`
+          : `(New-Object Media.SoundPlayer '${psPath}').PlaySync()`
+      ];
+    } else {
+      // MP3 / other formats: WPF MediaPlayer supports more codecs (requires STA + presentationCore)
+      const vol = Math.min(1, volume);
+      const uriPath = soundFile.replace(/\\/g, '/').replace(/'/g, "''");
+      cmd = 'powershell';
+      args = ['-NoProfile', '-NonInteractive', '-STA', '-Command',
+        `Add-Type -AssemblyName presentationCore; $p = New-Object System.Windows.Media.MediaPlayer; $p.Volume = ${vol}; $p.Open([uri][uri]::EscapeUriString('file:///${uriPath}')); $p.Play(); Start-Sleep -Seconds 5; $p.Close()`
+      ];
+    }
     spawnOpts = { stdio: 'ignore' };
   } else {
     const paVol = Math.round(volume * 65536);
@@ -332,7 +347,7 @@ function syncHookSound(context: vscode.ExtensionContext, sourcePath?: string) {
       outputChannel.appendLine(`[hook] non-WAV source (${path.basename(src)}) — falling back to bundled WAV for hook`);
       src = path.join(context.extensionPath, 'media', 'notify.wav');
     }
-    const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
+    const volume = Math.max(0, Math.min(2, getConfig().get<number>('volume', 1)));
     const raw = fs.readFileSync(src);
     const out = src.toLowerCase().endsWith('.wav') ? scaleWavBuffer(raw, volume) : raw;
     fs.writeFileSync(STABLE_SOUND_PATH, out);
@@ -929,7 +944,9 @@ export function activate(context: vscode.ExtensionContext) {
           const volPick = await vscode.window.showQuickPick(
             [
               { label: '25%' }, { label: '50%' }, { label: '75%' }, { label: '100%' },
-              { label: 'Custom…', description: 'Enter any value 0–100' },
+              { label: '150%', description: 'Digital amplification' },
+              { label: '200%', description: 'Digital amplification — may clip loud files' },
+              { label: 'Custom…', description: 'Enter any value 0–200' },
             ],
             { title: `Notification Bell — Volume  (current: ${Math.round(volume * 100)}%)` }
           );
@@ -937,11 +954,11 @@ export function activate(context: vscode.ExtensionContext) {
           let newVol: number;
           if (volPick.label === 'Custom…') {
             const input = await vscode.window.showInputBox({
-              prompt: 'Volume (0 = silent, 100 = full)',
+              prompt: 'Volume (0 = silent, 100 = full, up to 200 for amplification)',
               value: String(Math.round(volume * 100)),
               validateInput: (v) => {
                 const n = parseInt(v, 10);
-                return isNaN(n) || n < 0 || n > 100 ? 'Enter a number from 0 to 100' : undefined;
+                return isNaN(n) || n < 0 || n > 200 ? 'Enter a number from 0 to 200' : undefined;
               },
             });
             if (input === undefined) { continue; }

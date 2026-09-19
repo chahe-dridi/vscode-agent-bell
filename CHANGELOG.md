@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.14] — 2026-09-20
+
+- Fix: **Volume above 100% now works** — `agentConfirmSound.volume` schema raised to max 2.0; `playSound` and `syncHookSound` no longer clamp to 1.0; WAV sample scaling now correctly applies for values both below and above 1.0 (150% and 200% pills in the settings panel now have real effect)
+- Fix: **MP3 plays on Windows** — non-WAV sound files on Windows now use WPF `System.Windows.Media.MediaPlayer` (STA mode, supports MP3/AIFF/OGG) instead of `Media.SoundPlayer` which only accepts WAV; switching to `notification-bell.mp3` and triggering an alert on Windows now plays audio correctly
+- Improve: **Manage Sounds volume picker** — 150% and 200% options added; custom input now accepts 0–200
+
 ## [0.5.13] — 2026-09-18
 
 - Add: **Focus mode** — new toggle in the settings panel (and `agentConfirmSound.focusMode` setting) that keeps alert sounds playing but suppresses OS popup notifications; useful when you can hear the bell but don't want balloon tips / macOS banners cluttering your screen

@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.5.13",
+  "version": "0.5.14",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -194,8 +194,8 @@
           "type": "number",
           "default": 1,
           "minimum": 0,
-          "maximum": 1,
-          "description": "Volume level from 0 (silent) to 1 (full). Applied via afplay (macOS), paplay (Linux), and WAV sample scaling (Windows). Only uncompressed 16-bit PCM WAV files support scaling — MP3 and other formats play at their encoded volume."
+          "maximum": 2,
+          "description": "Volume from 0 (silent) to 1 (full) to 2 (200% amplification). Applied via afplay -v (macOS), paplay --volume (Linux), and WAV sample scaling (Windows). Values above 1.0 digitally amplify — may clip very loud source files. Only 16-bit PCM WAV supports scaling on Windows; MP3/OGG play via WPF MediaPlayer."
         },
         "agentConfirmSound.focusTerminal": {
           "type": "boolean",
