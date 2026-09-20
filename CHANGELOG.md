@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.5.15] — 2026-09-20
+
+- Refactor: **Split `extension.ts` into focused modules** — the single 1 549-line file is now 11 modules (`config`, `logger`, `history`, `sound`, `notifications`, `statusBar`, `reminder`, `hooks`, `terminal`, `panel`, `extension`), each under 560 lines; no behaviour changes, compiled output is identical
+
 ## [0.5.14] — 2026-09-20
 
 - Fix: **Volume above 100% now works** — `agentConfirmSound.volume` schema raised to max 2.0; `playSound` and `syncHookSound` no longer clamp to 1.0; WAV sample scaling now correctly applies for values both below and above 1.0 (150% and 200% pills in the settings panel now have real effect)

@@ -18,10 +18,6 @@ Allow different sounds for confirmations vs. completions vs. hook events. Config
 ```
 Tracked in [#195](https://github.com/chahe-dridi/vscode-agent-bell/issues/195).
 
-**Volume above 100% via settings panel slider**
-The panel currently shows volume pills (0–200%) but the VS Code setting clamps to 1.0. Extend the schema to allow up to 2.0 and add a proper range slider in the panel.
-Tracked in [#196](https://github.com/chahe-dridi/vscode-agent-bell/issues/196).
-
 **Min task duration picker in settings panel**
 `commandEndMinDurationMs` currently shows the value with a "Change…" link to full settings. Replace it with inline increment/decrement buttons in the panel.
 Tracked in [#198](https://github.com/chahe-dridi/vscode-agent-bell/issues/198).
@@ -76,3 +72,5 @@ Global cooldown so rapid fires across multiple terminals don't stack. Separate f
 | 0.5.11 | Settings panel moved to Explorer sidebar (WebviewViewProvider) |
 | 0.5.12 | Settings panel moved to bottom panel area |
 | 0.5.13 | Focus mode (sound on, OS popups off) + info badge tooltips on every panel row |
+| 0.5.14 | Volume above 100% fixed (schema + clamp + WAV scaling); MP3 playback on Windows via WPF MediaPlayer |
+| 0.5.15 | Codebase split into 11 focused modules — no single file exceeds 560 lines |

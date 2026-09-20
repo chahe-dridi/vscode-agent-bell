@@ -50,7 +50,7 @@ Requires shell integration (bash, zsh, fish, PowerShell). Full-screen TUI apps w
 
 ## Key design decisions
 
-**Single file.** All extension logic lives in `src/extension.ts`. This keeps navigation simple and avoids premature abstraction for a focused tool.
+**Module split.** Extension logic is spread across 11 focused source files under `src/`. Each module owns one concern (sound playback, hook integration, terminal watching, etc.) and is imported by `extension.ts` which acts as the thin orchestrator — wiring commands, event listeners, and lifecycle. No file exceeds 560 lines.
 
 **Shell integration required for Path 2.** VS Code's `onDidStartTerminalShellExecution` only fires when shell integration is active. Raw shells, WSL without integration, or full-screen TUI apps (ncurses) won't expose output — this is a VS Code API constraint.
 
@@ -83,7 +83,17 @@ Requires shell integration (bash, zsh, fish, PowerShell). Full-screen TUI apps w
 ```
 agent-confirm-sound/
 ├── src/
-│   └── extension.ts          ← all extension logic (single file)
+│   ├── extension.ts          ← activate / deactivate + command wiring
+│   ├── config.ts             ← getConfig(), getAlertOn(), shared path constants
+│   ├── logger.ts             ← output channel singleton
+│   ├── history.ts            ← alert ring buffer, addAlert, relativeTime
+│   ├── sound.ts              ← scaleWavBuffer, pickSoundFile, playSound, triggerSound
+│   ├── notifications.ts      ← showOsNotification (Windows/macOS/Linux)
+│   ├── statusBar.ts          ← status bar items, flash, setWatching
+│   ├── reminder.ts           ← scheduleReminder, clearReminder
+│   ├── hooks.ts              ← Claude Code hook install/remove/sync/signal-watcher
+│   ├── terminal.ts           ← watchExecution, maybeTrigger, getPatterns, stripAnsi
+│   └── panel.ts              ← SettingsViewProvider, buildPanelHtml
 ├── media/
 │   ├── notify.wav            ← bundled default sound (16-bit PCM WAV)
 │   └── notification-bell.mp3 ← second bundled sound
