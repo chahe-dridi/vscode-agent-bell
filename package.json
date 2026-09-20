@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.5.17",
+  "version": "0.5.18",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -159,7 +159,7 @@
             "\\[Y\\s*/\\s*n\\]",
             "do you want to proceed",
             "do you want to continue",
-            "allow this (action|command|tool)",
+            "allow this (action|bash|command|tool)",
             "would you like to proceed",
             "press enter to confirm",
             "confirm\\?\\s*$",
@@ -263,6 +263,11 @@
           ],
           "default": "fixed",
           "description": "How to pick a sound when multiple are configured. 'fixed' uses the first, 'random' picks one at random."
+        },
+        "agentConfirmSound.soundOnCommandStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Play a sound every time a terminal command starts executing. Useful to hear when Claude Code (or any agent) fires off a command. Respects the terminal name filter and the master toggle."
         }
       }
     }

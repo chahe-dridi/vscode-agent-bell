@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.5.18] — 2026-09-20
+
+- Fix: **"Allow this bash command?" now triggers a sound** — default pattern updated from `allow this (action|command|tool)` to include `bash`, so Claude Code's bash approval prompt is caught by the terminal watcher
+- Add: **"Every command" event in settings panel** — new toggle (`agentConfirmSound.soundOnCommandStart`) plays a sound every time a terminal command starts executing; useful to hear when Claude Code fires off a bash command; off by default
+
 ## [0.5.17] — 2026-09-20
 
 - Fix: **Windows hook plays MP3/non-WAV sounds with no helper file** — `Add-Type -Name MCI -MemberDefinition '...' -Namespace W` inlines the `winmm.dll` P/Invoke directly in the hook command string; `mciSendString('play m wait')` is synchronous and works in any Windows session type. No `agent-bell-play.ps1` is written to disk; `removeClaudeHook` still cleans it up from installs that had the v0.5.16 file

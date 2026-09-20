@@ -120,6 +120,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.window.onDidStartTerminalShellExecution((event) => {
       commandStartAt.set(event.terminal, Date.now());
       if (getReminderTerminal() === event.terminal) { clearReminder(); }
+      if (getWatching() && getConfig().get<boolean>('soundOnCommandStart', false) && terminalPassesNameFilter(event.terminal)) {
+        triggerSound(ctx);
+      }
       if (getAlertOn().includes('confirmation') && getPatterns().length > 0 && terminalPassesNameFilter(event.terminal)) {
         const prev = executionControllers.get(event.terminal);
         if (prev) { prev.abort(); }
@@ -250,7 +253,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         'agentConfirmSound.osNotification', 'agentConfirmSound.hookPreToolUse',
         'agentConfirmSound.muteWhenFocused', 'agentConfirmSound.focusMode',
         'agentConfirmSound.reminderIntervalMs', 'agentConfirmSound.reminderMaxCount',
-        'agentConfirmSound.debugLog',
+        'agentConfirmSound.debugLog', 'agentConfirmSound.soundOnCommandStart',
       ];
       for (const key of keys) {
         await config.update(key, undefined, vscode.ConfigurationTarget.Global);
