@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
-import * as cp from 'node:child_process';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
 import {
   getConfig, getAlertOn,
-  CLAUDE_DIR, STABLE_SOUND_PATH, MUTE_FLAG_PATH, CLAUDE_SETTINGS_PATH, HOOK_SIGNAL_PATH, HOOK_MARKER,
+  CLAUDE_DIR, STABLE_SOUND_PATH, MUTE_FLAG_PATH, CLAUDE_SETTINGS_PATH,
+  HOOK_SIGNAL_PATH, HOOK_MARKER,
 } from './config';
 import { log } from './logger';
 import { scaleWavBuffer } from './sound';
@@ -71,28 +71,31 @@ export function isHookInstalled(): boolean {
 let _hookSoundPath = STABLE_SOUND_PATH;
 
 function buildHookCommand(soundFile: string, hookEvent: string): string {
-  const platform   = os.platform();
-  const mutePs     = MUTE_FLAG_PATH.replace(/\\/g, '\\\\');
-  const signalPath = HOOK_SIGNAL_PATH;
+  const platform = os.platform();
 
-  if (platform === 'darwin') {
-    const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
-    return `(test -f "${MUTE_FLAG_PATH}" || afplay -v ${volume} "${soundFile}"); printf '%s' "${hookEvent}" > "${signalPath}"`;
-  } else if (platform === 'win32') {
-    const signalPs = signalPath.replace(/'/g, "''");
+  if (platform === 'win32') {
+    const mutePs = MUTE_FLAG_PATH.replace(/\\/g, '/');
+    const sigPs  = HOOK_SIGNAL_PATH.replace(/\\/g, '/').replace(/'/g, "''");
+    const vol    = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
+
     if (soundFile.toLowerCase().endsWith('.wav')) {
-      const ps = soundFile.replace(/'/g, "''");
-      return `powershell -NoProfile -NonInteractive -Command "if (-not (Test-Path '${mutePs}')) { (New-Object Media.SoundPlayer '${ps}').PlaySync() }; [IO.File]::WriteAllText('${signalPs}', '${hookEvent}')"`;
+      const ps = soundFile.replace(/\\/g, '/').replace(/'/g, "''");
+      return `powershell -NoProfile -NonInteractive -Command "if (-not (Test-Path '${mutePs}')) { (New-Object Media.SoundPlayer '${ps}').PlaySync() }; [IO.File]::WriteAllText('${sigPs}', '${hookEvent}')"`;
     } else {
-      // Non-WAV (MP3/OGG/etc.): use WPF MediaPlayer via STA thread
-      const vol     = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
-      const uriPath = soundFile.replace(/\\/g, '/').replace(/'/g, "''");
-      return `powershell -NoProfile -NonInteractive -STA -Command "if (-not (Test-Path '${mutePs}')) { Add-Type -AssemblyName presentationCore; $p = New-Object System.Windows.Media.MediaPlayer; $p.Volume = ${vol}; $p.Open([uri][uri]::EscapeUriString('file:///${uriPath}')); $p.Play(); Start-Sleep -Seconds 5; $p.Close() }; [IO.File]::WriteAllText('${signalPs}', '${hookEvent}')"`;
+      // Inline MCI via Add-Type -Name/-MemberDefinition (winmm.dll) — no helper file needed.
+      // cmd.exe collapses each "" to " before PowerShell sees the -Command string, so the C# DllImport
+      // attribute and the mciSendString "open" call receive correct double-quotes after parsing.
+      const sndFwd = soundFile.replace(/\\/g, '/');
+      const volMci = Math.round(vol * 1000);
+      return `powershell -NoProfile -NonInteractive -Command "if (-not (Test-Path '${mutePs}')) { if (-not ([System.Management.Automation.PSTypeName]'W.MCI').Type) { Add-Type -Name MCI -MemberDefinition '[DllImport(""winmm.dll"",CharSet=CharSet.Auto)] public static extern int mciSendString(string cmd, System.Text.StringBuilder ret, int cch, IntPtr hwnd);' -Namespace W }; $f = '${sndFwd}'; [W.MCI]::mciSendString(""open \`""$f\`"" type mpegvideo alias m"", $null, 0, [IntPtr]::Zero) | Out-Null; [W.MCI]::mciSendString('setaudio m volume to ${volMci}', $null, 0, [IntPtr]::Zero) | Out-Null; [W.MCI]::mciSendString('play m wait', $null, 0, [IntPtr]::Zero) | Out-Null; [W.MCI]::mciSendString('close m', $null, 0, [IntPtr]::Zero) | Out-Null }; [IO.File]::WriteAllText('${sigPs}', '${hookEvent}')"`;
     }
+  } else if (platform === 'darwin') {
+    const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
+    return `(test -f "${MUTE_FLAG_PATH}" || afplay -v ${volume} "${soundFile}"); printf '%s' "${hookEvent}" > "${HOOK_SIGNAL_PATH}"`;
   } else {
     const volume = Math.min(1, Math.max(0, getConfig().get<number>('volume', 1)));
     const paVol  = Math.round(volume * 65536);
-    return `(test -f "${MUTE_FLAG_PATH}" || (paplay --volume=${paVol} "${soundFile}" 2>/dev/null || aplay "${soundFile}" 2>/dev/null)); printf '%s' "${hookEvent}" > "${signalPath}"`;
+    return `(test -f "${MUTE_FLAG_PATH}" || (paplay --volume=${paVol} "${soundFile}" 2>/dev/null || aplay "${soundFile}" 2>/dev/null)); printf '%s' "${hookEvent}" > "${HOOK_SIGNAL_PATH}"`;
   }
 }
 
@@ -107,13 +110,10 @@ export function syncHookSound(ctx: vscode.ExtensionContext, sourcePath?: string)
     const isWav  = src.toLowerCase().endsWith('.wav');
 
     if (isWav) {
-      // Scale WAV samples in-memory and write to the stable WAV path.
       const raw = fs.readFileSync(src);
       fs.writeFileSync(STABLE_SOUND_PATH, scaleWavBuffer(raw, volume));
       _hookSoundPath = STABLE_SOUND_PATH;
     } else {
-      // Copy non-WAV to a stable path under ~/.claude/ with the original extension.
-      // The hook command will play it via WPF MediaPlayer (Windows) or afplay/paplay.
       const ext        = path.extname(src).toLowerCase();
       const stablePath = path.join(CLAUDE_DIR, `agent-bell-sound${ext}`);
       fs.copyFileSync(src, stablePath);
@@ -142,13 +142,22 @@ export function refreshHookCommands() {
     if (!hooks) { return; }
     for (const { event } of HOOK_CONFIGS) {
       const cmd = buildHookCommand(_hookSoundPath, event);
-      for (const g of (hooks[event] ?? [])) {
-        for (const h of (g.hooks ?? [])) {
-          if (h.command?.includes(HOOK_MARKER)) {
-            (h as { command: string }).command = cmd;
-          }
-        }
-      }
+      let seenBell = false;
+      // Update command in every matching group, then collapse duplicates (keep first bell group only)
+      hooks[event] = (hooks[event] ?? [])
+        .map((g) => ({
+          ...g,
+          hooks: (g.hooks ?? []).map((h) =>
+            h.command?.includes(HOOK_MARKER) ? { ...h, command: cmd } : h
+          ),
+        }))
+        .filter((g) => {
+          const hasBell = (g.hooks ?? []).some((h) => h.command?.includes(HOOK_MARKER));
+          if (!hasBell) { return true; }
+          if (seenBell) { return false; }
+          seenBell = true;
+          return true;
+        });
     }
     settings['hooks'] = hooks;
     writeClaudeSettings(settings);
@@ -203,7 +212,14 @@ export async function removeClaudeHook(ctx: vscode.ExtensionContext): Promise<vo
     settings['hooks'] = hooks;
     writeClaudeSettings(settings);
   }
+  // Remove stable hook sound file and all non-WAV copies we may have written under ~/.claude/.
+  // Also clean up agent-bell-play.ps1 if it was written by an earlier version (0.5.16).
   try { if (fs.existsSync(STABLE_SOUND_PATH)) { fs.unlinkSync(STABLE_SOUND_PATH); } } catch { /* ignore */ }
+  try {
+    for (const f of fs.readdirSync(CLAUDE_DIR).filter((n) => /^agent-bell-(sound\..+|play\.ps1)$/.test(n))) {
+      fs.unlinkSync(path.join(CLAUDE_DIR, f));
+    }
+  } catch { /* ignore */ }
   log('[hook] Claude Code hooks removed.');
   await ctx.globalState.update('hookDecision', 'removed');
 }

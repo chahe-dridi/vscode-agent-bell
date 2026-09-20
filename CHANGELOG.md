@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.17] — 2026-09-20
+
+- Fix: **Windows hook plays MP3/non-WAV sounds with no helper file** — `Add-Type -Name MCI -MemberDefinition '...' -Namespace W` inlines the `winmm.dll` P/Invoke directly in the hook command string; `mciSendString('play m wait')` is synchronous and works in any Windows session type. No `agent-bell-play.ps1` is written to disk; `removeClaudeHook` still cleans it up from installs that had the v0.5.16 file
+
+## [0.5.16] — 2026-09-20
+
+- Fix: **Hook detection works for all sound formats** — `HOOK_MARKER` changed from `agent-bell-notify` (only present in WAV paths) to `agent-bell` (prefix of every file we write to `~/.claude/`), so `isHookInstalled()` correctly returns `true` for MP3 and WAV alike; `isHookInstalled()` returning `false` previously meant the signal watcher never started on VS Code startup
+- Fix: **`removeClaudeHook` cleans up all generated hook files** — deletes any `agent-bell-sound.*` files and the v0.5.16 `agent-bell-play.ps1` if present
+
 ## [0.5.15] — 2026-09-20
 
 - Refactor: **Split `extension.ts` into focused modules** — the single 1 549-line file is now 11 modules (`config`, `logger`, `history`, `sound`, `notifications`, `statusBar`, `reminder`, `hooks`, `terminal`, `panel`, `extension`), each under 560 lines; no behaviour changes, compiled output is identical
