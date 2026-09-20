@@ -43,6 +43,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   setWatching(getConfig().get<boolean>('enabled', true));
 
   if (isHookInstalled()) {
+    syncHookSound(ctx);   // must run before refreshHookCommands to set _hookSoundPath
     refreshHookCommands();
     setupHookSignalWatcher();
   }
