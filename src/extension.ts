@@ -84,6 +84,7 @@ function clearReminder() {
 const lastTriggerAt   = new Map<vscode.Terminal, number>();
 const commandStartAt  = new Map<vscode.Terminal, number>();
 const terminalExecutionControllers = new Map<vscode.Terminal, AbortController>();
+const mutedTerminals = new Set<vscode.Terminal>();
 
 const STABLE_SOUND_PATH  = path.join(os.homedir(), '.claude', 'agent-bell-notify.wav');
 const MUTE_FLAG_PATH     = path.join(os.homedir(), '.claude', 'agent-bell-mute');
@@ -542,8 +543,15 @@ function terminalPassesNameFilter(terminal: vscode.Terminal): boolean {
 
 // ─── Status bar ──────────────────────────────────────────────────────────────
 
+function withMutedTerminals(tooltip: string): string {
+  return mutedTerminals.size > 0
+    ? `${tooltip}\nMuted terminals: ${[...mutedTerminals].map((terminal) => terminal.name).join(', ')}`
+    : tooltip;
+}
+
 function updateStatusBar() {
   if (flashTimer) {
+    statusBarItem.tooltip = withMutedTerminals(`Last alert: ${lastMatchLabel}`);
     return;
   }
   const count = sessionAlertCount;
@@ -564,6 +572,7 @@ function updateStatusBar() {
       ? `Notification Bell — ${count} alert${count === 1 ? '' : 's'} this session · ${filterLabel}`
       : `Notification Bell — ${filterLabel} (click to view alert history)`;
   }
+  statusBarItem.tooltip = withMutedTerminals(statusBarItem.tooltip as string);
   statusBarItem.show();
 }
 
@@ -575,7 +584,7 @@ function flashStatusBar(label: string) {
   statusBarItem.text = `$(bell-dot) Notification Bell: Alert!`;
   statusBarItem.color = undefined;
   statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
-  statusBarItem.tooltip = `Last alert: ${label}`;
+  statusBarItem.tooltip = withMutedTerminals(`Last alert: ${label}`);
   statusBarItem.show();
   flashTimer = setTimeout(() => {
     flashTimer = undefined;
@@ -601,6 +610,23 @@ function setWatching(value: boolean) {
   setMuteFlag(!value);
   if (!value) { clearReminder(); }
   outputChannel.appendLine(value ? '[info] watching started.' : '[info] watching paused.');
+}
+
+function setActiveTerminalMuted(muted: boolean) {
+  const terminal = vscode.window.activeTerminal;
+  if (!terminal) {
+    vscode.window.showInformationMessage('Notification Bell: no active terminal.');
+    return;
+  }
+  if (muted) {
+    mutedTerminals.add(terminal);
+    if (reminderTerminal === terminal) { clearReminder(); }
+  } else {
+    mutedTerminals.delete(terminal);
+  }
+  updateStatusBar();
+  outputChannel.appendLine(`[info] ${muted ? 'muted' : 'unmuted'} terminal "${terminal.name}".`);
+  vscode.window.showInformationMessage(`Notification Bell: ${muted ? 'muted' : 'unmuted'} "${terminal.name}".`);
 }
 
 // ─── Activation ──────────────────────────────────────────────────────────────
@@ -697,6 +723,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
     vscode.window.onDidCloseTerminal((terminal) => {
+      if (mutedTerminals.delete(terminal)) { updateStatusBar(); }
+      if (reminderTerminal === terminal) { clearReminder(); }
       lastTriggerAt.delete(terminal);
       commandStartAt.delete(terminal);
       // Abort the watchExecution loop so the async iterator does not linger.
@@ -725,14 +753,15 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
     vscode.window.onDidEndTerminalShellExecution((event) => {
+      const started = commandStartAt.get(event.terminal);
+      commandStartAt.delete(event.terminal);
       if (!watching) { return; }
+      if (mutedTerminals.has(event.terminal)) { return; }
       if (!getAlertOn().includes('completion')) { return; }
       if (!getConfig().get<boolean>('alertOnCommandEnd', true)) { return; }
       if (!terminalPassesNameFilter(event.terminal)) { return; }
 
       const now = Date.now();
-      const started = commandStartAt.get(event.terminal);
-      commandStartAt.delete(event.terminal);
       if (started === undefined) { return; }  // command started before extension was active
       const elapsed = now - started;
       const minMs = getConfig().get<number>('commandEndMinDurationMs', 3000);
@@ -764,6 +793,12 @@ export function activate(context: vscode.ExtensionContext) {
           : `"${event.terminal.name}" finished`;
         showOsNotification(label);
       }
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.muteTerminal', () => {
+      setActiveTerminalMuted(true);
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.unmuteTerminal', () => {
+      setActiveTerminalMuted(false);
     }),
     vscode.commands.registerCommand('agentConfirmSound.toggle', () => {
       // Clear any active flash before toggling so the state change is immediate.
@@ -1494,6 +1529,7 @@ async function watchExecution(
 
 function maybeTrigger(context: vscode.ExtensionContext, terminal: vscode.Terminal, chunk: string) {
   if (!watching) { return; }
+  if (mutedTerminals.has(terminal)) { return; }
   if (!getAlertOn().includes('confirmation')) { return; }
   const patterns = getPatterns();
   if (!patterns.length) { return; }
@@ -1539,6 +1575,7 @@ export function deactivate() {
   if (flashTimer) { clearTimeout(flashTimer); }
   lastTriggerAt.clear();
   commandStartAt.clear();
+  mutedTerminals.clear();
   // Abort all pending execution watchers so async iterators don't linger after unload.
   for (const ac of terminalExecutionControllers.values()) { ac.abort(); }
   terminalExecutionControllers.clear();

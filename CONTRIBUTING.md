@@ -30,6 +30,7 @@ git checkout -b feature/your-branch-name
 
 npm install
 npm run compile           # compile TypeScript
+npm test                  # compile and run terminal-mute regression tests
 ```
 
 Press **F5** in VS Code to launch the Extension Development Host with your changes live.

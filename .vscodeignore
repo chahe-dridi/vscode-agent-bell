@@ -11,3 +11,4 @@ dist/**
 docs/**
 .qodo/**
 .claude/**
+test/**

@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.5.14",
+  "version": "0.6.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -48,6 +48,16 @@
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
+      {
+        "command": "agentConfirmSound.muteTerminal",
+        "title": "Mute This Terminal",
+        "category": "Notification Bell"
+      },
+      {
+        "command": "agentConfirmSound.unmuteTerminal",
+        "title": "Unmute This Terminal",
+        "category": "Notification Bell"
+      },
       {
         "command": "agentConfirmSound.toggle",
         "title": "Toggle Watching",
@@ -270,8 +280,9 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "test": "npm run compile && node --test test/*.test.cjs",
     "watch": "tsc -watch -p ./",
-    "package": "npm run compile && npx vsce package --out dist/"
+    "package": "npm run compile && node -e \"require('node:fs').mkdirSync('dist', { recursive: true })\" && npx vsce package --out dist/"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

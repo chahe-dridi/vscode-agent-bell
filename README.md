@@ -124,6 +124,10 @@ These hooks run directly from Claude Code's process — **they work even when VS
 
 ## Terminal Watching (Other Agents)
 
+To quiet one noisy terminal, select it and run **Notification Bell: Mute This Terminal** from the Command Palette. Other terminals keep alerting. Run **Notification Bell: Unmute This Terminal** to resume its alerts.
+
+Muting suppresses prompt and command-completion alerts and cancels that terminal's pending reminder. Hover over the bell in the status bar to see muted terminal names. Mutes are in memory only and clear when the terminal closes or the extension reloads. Claude Code hook alerts are unaffected because hooks do not identify their terminal.
+
 For agents running in a standard VS Code terminal — aider, Gemini CLI, custom scripts — Notification Bell watches terminal output and plays a sound when a line matches a configured regex pattern such as `(y/n)`, `Allow this action?`, or `Press enter to confirm`.
 
 > Requires shell integration, which is on by default for bash, zsh, fish, and PowerShell in recent VS Code. A small decoration appears to the left of your prompt when it's active.
@@ -207,6 +211,8 @@ Open the Command Palette (`Ctrl+Shift+P`) and type "Notification Bell":
 | Command | Description |
 |---|---|
 | `Notification Bell: Toggle Watching` | Pause or resume terminal watching. |
+| `Notification Bell: Mute This Terminal` | Mute alerts and cancel any pending reminder for the active terminal. |
+| `Notification Bell: Unmute This Terminal` | Resume alerts for the active terminal. |
 | `Notification Bell: Play Test Sound` | Play the alert sound immediately to verify audio is working. |
 | `Notification Bell: Show Log` | Open the output channel for match logs and debug info. |
 | `Notification Bell: Test Pattern` | Enter terminal output — see which pattern matched and copies the regex to clipboard. |

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.0] — 2026-09-21
+
+- Add: **Mute This Terminal / Unmute This Terminal** commands suppress prompt and command-completion alerts for the active terminal without pausing other terminals. Muting also cancels that terminal's pending reminder.
+- Add: Status bar tooltips list muted terminals. Mutes last only for the current terminal session and are cleared when the terminal closes or the extension reloads.
+
 ## [0.5.14] — 2026-09-20
 
 - Fix: **Volume above 100% now works** — `agentConfirmSound.volume` schema raised to max 2.0; `playSound` and `syncHookSound` no longer clamp to 1.0; WAV sample scaling now correctly applies for values both below and above 1.0 (150% and 200% pills in the settings panel now have real effect)
