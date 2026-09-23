@@ -140,6 +140,7 @@ jobs:
 
       - name: VSIX size budget (max 2 MB)
         run: |
+          mkdir -p dist
           npm run package
           SIZE=$(wc -c < dist/*.vsix)
           MAX=2097152

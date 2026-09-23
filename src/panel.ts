@@ -40,6 +40,10 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
           await cfg.update('focusMode', msg.value, vscode.ConfigurationTarget.Global);
           this.refresh();
           break;
+        case 'setSoundOnCommandStart':
+          await cfg.update('soundOnCommandStart', msg.value, vscode.ConfigurationTarget.Global);
+          this.refresh();
+          break;
         case 'previewSound':
           triggerSound(this.ctx);
           break;
@@ -63,10 +67,11 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   const minDurLabel = minDurMs === 0 ? 'off' : minDurMs < 1000 ? `${minDurMs}ms` : `${minDurMs / 1000}s`;
   const muted       = cfg.get<boolean>('muteWhenFocused', false);
   const focusMode   = cfg.get<boolean>('focusMode', false);
-  const alertOn     = getAlertOn();
-  const soundName   = path.basename(pickSoundFile(ctx));
-  const hookInstalled = isHookInstalled();
-  const watching    = getWatching();
+  const alertOn            = getAlertOn();
+  const soundName          = path.basename(pickSoundFile(ctx));
+  const hookInstalled      = isHookInstalled();
+  const watching           = getWatching();
+  const soundOnCmdStart    = cfg.get<boolean>('soundOnCommandStart', false);
 
   const volSteps = [0, 25, 50, 75, 100, 150, 200];
   const volPills = volSteps.map(v => {
@@ -80,14 +85,23 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
     { label: 'Claude Code hook',    icon: '☁️',  enabled: hookInstalled },
   ];
 
-  const eventRows = events.map(e => `
+  const eventRows = [
+    ...events.map(e => `
     <div class="event-row">
       <span class="event-icon">${e.icon}</span>
       <span class="event-label">${e.label}</span>
       <span class="event-sound">${e.enabled ? soundName : '<em>disabled</em>'}</span>
       ${e.enabled ? `<button class="link-btn" onclick="send('previewSound')">▷ Preview</button>` : ''}
       <button class="link-btn" onclick="send('openSettings')">› Change</button>
-    </div>`).join('');
+    </div>`),
+    `<div class="event-row">
+      <span class="event-icon">⌨</span>
+      <span class="event-label">Every command</span>
+      <span class="info" data-tip="Play a sound every time a terminal command starts. Lets you hear when Claude Code fires off a bash command. Respects the terminal name filter.">!</span>
+      <input type="checkbox" class="toggle" ${soundOnCmdStart ? 'checked' : ''} onchange="send('setSoundOnCommandStart', this.checked)">
+      <span style="font-size:0.88em;color:var(--vscode-descriptionForeground)">${soundOnCmdStart ? 'On' : 'Off'}</span>
+    </div>`,
+  ].join('');
 
   return `<!DOCTYPE html>
 <html lang="en">

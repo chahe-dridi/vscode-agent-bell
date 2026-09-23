@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.0] — 2026-09-23
+
+- Add: **Mute This Terminal / Unmute This Terminal** commands — suppress all alerts (confirmation prompts, command-end sounds, OS notifications, reminders) for the active terminal without pausing other terminals. Muting also cancels any pending reminder for that terminal. Mutes are cleared when the terminal closes or the extension reloads.
+- Improve: **Status bar tooltip lists muted terminals** — hover the bell icon to see which terminals are currently muted.
+
+## [0.5.18] — 2026-09-20
+
+- Fix: **"Allow this bash command?" now triggers a sound** — default pattern updated from `allow this (action|command|tool)` to include `bash`, so Claude Code's bash approval prompt is caught by the terminal watcher
+- Add: **"Every command" event in settings panel** — new toggle (`agentConfirmSound.soundOnCommandStart`) plays a sound every time a terminal command starts executing; useful to hear when Claude Code fires off a bash command; off by default
+
+## [0.5.17] — 2026-09-20
+
+- Fix: **Windows hook plays MP3/non-WAV sounds with no helper file** — `Add-Type -Name MCI -MemberDefinition '...' -Namespace W` inlines the `winmm.dll` P/Invoke directly in the hook command string; `mciSendString('play m wait')` is synchronous and works in any Windows session type. No `agent-bell-play.ps1` is written to disk; `removeClaudeHook` still cleans it up from installs that had the v0.5.16 file
+
+## [0.5.16] — 2026-09-20
+
+- Fix: **Hook detection works for all sound formats** — `HOOK_MARKER` changed from `agent-bell-notify` (only present in WAV paths) to `agent-bell` (prefix of every file we write to `~/.claude/`), so `isHookInstalled()` correctly returns `true` for MP3 and WAV alike; `isHookInstalled()` returning `false` previously meant the signal watcher never started on VS Code startup
+- Fix: **`removeClaudeHook` cleans up all generated hook files** — deletes any `agent-bell-sound.*` files and the v0.5.16 `agent-bell-play.ps1` if present
+
 ## [0.5.15] — 2026-09-20
 
 - Refactor: **Split `extension.ts` into focused modules** — the single 1 549-line file is now 11 modules (`config`, `logger`, `history`, `sound`, `notifications`, `statusBar`, `reminder`, `hooks`, `terminal`, `panel`, `extension`), each under 560 lines; no behaviour changes, compiled output is identical

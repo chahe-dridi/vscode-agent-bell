@@ -7,6 +7,17 @@ import { getSessionAlertCount } from './history';
 let _item: vscode.StatusBarItem;
 let _flashTimer: ReturnType<typeof setTimeout> | undefined;
 let _watching = false;
+let _mutedNames: string[] = [];
+
+export function setMutedNames(names: string[]) {
+  _mutedNames = names;
+}
+
+function withMutedSuffix(tooltip: string): string {
+  return _mutedNames.length > 0
+    ? `${tooltip}\nMuted: ${_mutedNames.join(', ')}`
+    : tooltip;
+}
 
 export function initStatusBar(item: vscode.StatusBarItem) {
   _item = item;
@@ -15,7 +26,10 @@ export function initStatusBar(item: vscode.StatusBarItem) {
 export function getWatching() { return _watching; }
 
 export function updateStatusBar() {
-  if (_flashTimer) { return; }
+  if (_flashTimer) {
+    _item.tooltip = withMutedSuffix(_item.tooltip as string);
+    return;
+  }
   const count = getSessionAlertCount();
   const filter = getConfig().get<string[]>('terminalNameFilter', []);
   const filterLabel = filter.length > 0
@@ -25,14 +39,14 @@ export function updateStatusBar() {
     _item.text = '🔕';
     _item.color = undefined;
     _item.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    _item.tooltip = 'Notification Bell — paused (click to view alert history)';
+    _item.tooltip = withMutedSuffix('Notification Bell — paused (click to view alert history)');
   } else {
     _item.text = count > 99 ? '🔔 99+' : count > 0 ? `🔔 ${count}` : '🔔';
     _item.color = undefined;
     _item.backgroundColor = undefined;
-    _item.tooltip = count > 0
+    _item.tooltip = withMutedSuffix(count > 0
       ? `Notification Bell — ${count} alert${count === 1 ? '' : 's'} this session · ${filterLabel}`
-      : `Notification Bell — ${filterLabel} (click to view alert history)`;
+      : `Notification Bell — ${filterLabel} (click to view alert history)`);
   }
   _item.show();
 }
@@ -42,7 +56,7 @@ export function flashStatusBar(label: string) {
   _item.text = `$(bell-dot) Notification Bell: Alert!`;
   _item.color = undefined;
   _item.backgroundColor = new vscode.ThemeColor('statusBarItem.prominentBackground');
-  _item.tooltip = `Last alert: ${label}`;
+  _item.tooltip = withMutedSuffix(`Last alert: ${label}`);
   _item.show();
   _flashTimer = setTimeout(() => {
     _flashTimer = undefined;
