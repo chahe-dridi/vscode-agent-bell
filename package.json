@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.5.18",
+  "version": "0.6.0",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -111,6 +111,16 @@
       {
         "command": "agentConfirmSound.openPanel",
         "title": "Open Settings Panel",
+        "category": "Notification Bell"
+      },
+      {
+        "command": "agentConfirmSound.muteTerminal",
+        "title": "Mute This Terminal",
+        "category": "Notification Bell"
+      },
+      {
+        "command": "agentConfirmSound.unmuteTerminal",
+        "title": "Unmute This Terminal",
         "category": "Notification Bell"
       }
     ],

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.0] — 2026-09-23
+
+- Add: **Mute This Terminal / Unmute This Terminal** commands — suppress all alerts (confirmation prompts, command-end sounds, OS notifications, reminders) for the active terminal without pausing other terminals. Muting also cancels any pending reminder for that terminal. Mutes are cleared when the terminal closes or the extension reloads.
+- Improve: **Status bar tooltip lists muted terminals** — hover the bell icon to see which terminals are currently muted.
+
 ## [0.5.18] — 2026-09-20
 
 - Fix: **"Allow this bash command?" now triggers a sound** — default pattern updated from `allow this (action|command|tool)` to include `bash`, so Claude Code's bash approval prompt is caught by the terminal watcher

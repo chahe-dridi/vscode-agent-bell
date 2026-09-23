@@ -77,3 +77,4 @@ Global cooldown so rapid fires across multiple terminals don't stack. Separate f
 | 0.5.16 | Hook detection fixed for MP3/non-WAV sounds (`HOOK_MARKER` broadened); `removeClaudeHook` cleans up all generated files |
 | 0.5.17 | Windows hook plays non-WAV inline — `Add-Type` MCI (`winmm.dll`) embedded directly in hook command; no `.ps1` helper file written to disk |
 | 0.5.18 | Fix bash approval pattern (`allow this bash`); add "Every command" toggle — plays sound on every terminal command start |
+| 0.6.0  | Mute This Terminal / Unmute This Terminal commands — per-terminal alert suppression; muted terminals listed in status bar tooltip |

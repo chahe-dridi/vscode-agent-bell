@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import { getConfig, getAlertOn, MUTE_FLAG_PATH, STABLE_SOUND_PATH } from './config';
 import { initLogger, log } from './logger';
 import { initHistory, addAlert, alertHistory, clearHistory, relativeTime } from './history';
-import { initStatusBar, updateStatusBar, flashStatusBar, setWatching, getWatching } from './statusBar';
+import { initStatusBar, updateStatusBar, flashStatusBar, setWatching, getWatching, setMutedNames } from './statusBar';
 import { initReminder, clearReminder, hasActiveReminder, getReminderTerminal } from './reminder';
 import { playSound, pickSoundFile, triggerSound } from './sound';
 import { showOsNotification } from './notifications';
@@ -15,7 +15,7 @@ import {
 } from './hooks';
 import {
   getPatterns, terminalPassesNameFilter, invalidatePatternCache, stripAnsi,
-  watchExecution, lastTriggerAt, commandStartAt, executionControllers,
+  watchExecution, lastTriggerAt, commandStartAt, executionControllers, mutedTerminals,
 } from './terminal';
 import { SettingsViewProvider } from './panel';
 
@@ -116,6 +116,10 @@ export function activate(ctx: vscode.ExtensionContext) {
       commandStartAt.delete(terminal);
       const ac = executionControllers.get(terminal);
       if (ac) { ac.abort(); executionControllers.delete(terminal); }
+      if (mutedTerminals.delete(terminal)) {
+        setMutedNames([...mutedTerminals].map((t) => t.name));
+        updateStatusBar();
+      }
     }),
     vscode.window.onDidStartTerminalShellExecution((event) => {
       commandStartAt.set(event.terminal, Date.now());
@@ -133,6 +137,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
     vscode.window.onDidEndTerminalShellExecution((event) => {
       if (!getWatching()) { return; }
+      if (mutedTerminals.has(event.terminal)) { return; }
       if (!getAlertOn().includes('completion')) { return; }
       if (!getConfig().get<boolean>('alertOnCommandEnd', true)) { return; }
       if (!terminalPassesNameFilter(event.terminal)) { return; }
@@ -175,6 +180,35 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('agentConfirmSound.toggle', () => {
       setWatching(!getWatching());
       if (!getWatching()) { clearReminder(); }
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.muteTerminal', () => {
+      const terminal = vscode.window.activeTerminal;
+      if (!terminal) {
+        vscode.window.showWarningMessage('Notification Bell: no active terminal to mute.');
+        return;
+      }
+      mutedTerminals.add(terminal);
+      if (getReminderTerminal() === terminal) { clearReminder(); }
+      setMutedNames([...mutedTerminals].map((t) => t.name));
+      updateStatusBar();
+      log(`[info] muted terminal: "${terminal.name}"`);
+      vscode.window.showInformationMessage(`Notification Bell: alerts muted for "${terminal.name}". Use "Unmute This Terminal" to restore.`);
+    }),
+    vscode.commands.registerCommand('agentConfirmSound.unmuteTerminal', () => {
+      const terminal = vscode.window.activeTerminal;
+      if (!terminal) {
+        vscode.window.showWarningMessage('Notification Bell: no active terminal to unmute.');
+        return;
+      }
+      if (!mutedTerminals.has(terminal)) {
+        vscode.window.showInformationMessage(`Notification Bell: "${terminal.name}" is not muted.`);
+        return;
+      }
+      mutedTerminals.delete(terminal);
+      setMutedNames([...mutedTerminals].map((t) => t.name));
+      updateStatusBar();
+      log(`[info] unmuted terminal: "${terminal.name}"`);
+      vscode.window.showInformationMessage(`Notification Bell: alerts restored for "${terminal.name}".`);
     }),
     vscode.commands.registerCommand('agentConfirmSound.testSound', () => {
       const file = pickSoundFile(ctx);
@@ -555,6 +589,7 @@ export function deactivate() {
   executionControllers.clear();
   lastTriggerAt.clear();
   commandStartAt.clear();
+  mutedTerminals.clear();
   clearReminder();
   teardownHookSignalWatcher();
   try { if (fs.existsSync(MUTE_FLAG_PATH)) { fs.unlinkSync(MUTE_FLAG_PATH); } } catch { /* ignore */ }

@@ -46,6 +46,7 @@ export function terminalPassesNameFilter(terminal: vscode.Terminal): boolean {
 export const lastTriggerAt        = new Map<vscode.Terminal, number>();
 export const commandStartAt       = new Map<vscode.Terminal, number>();
 export const executionControllers = new Map<vscode.Terminal, AbortController>();
+export const mutedTerminals       = new Set<vscode.Terminal>();
 
 export async function watchExecution(
   ctx: vscode.ExtensionContext,
@@ -71,6 +72,7 @@ export function maybeTrigger(
   chunk: string
 ) {
   if (!getWatching()) { return; }
+  if (mutedTerminals.has(terminal)) { return; }
   if (!getAlertOn().includes('confirmation')) { return; }
   const patterns = getPatterns();
   if (!patterns.length) { return; }
