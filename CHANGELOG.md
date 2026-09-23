@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1] — 2026-09-23
+
+- Improve: **Settings panel exposes all settings** — every `agentConfirmSound.*` config key is now controllable from the panel without opening full settings:
+  - Master ON/OFF toggle in the header
+  - **Behavior section**: OS notifications, focus terminal on alert, terminal name filter (display + link), debounce interval (1s / 2s / 4s / 8s pills), debug log toggle
+  - **Events section**: inline on/off toggle per event type (confirmation, task completed); command-end alert toggle + min-duration pills nested under Task completed; Claude Code hook setup/remove button + PreToolUse toggle; reminder interval pills (Off / 1m / 2m / 5m / 10m) + max-repeats pills
+  - Sound row with preview and direct link to Manage Sounds (no longer routes through full settings)
+
 ## [0.6.0] — 2026-09-23
 
 - Add: **Mute This Terminal / Unmute This Terminal** commands — suppress all alerts (confirmation prompts, command-end sounds, OS notifications, reminders) for the active terminal without pausing other terminals. Muting also cancels any pending reminder for that terminal. Mutes are cleared when the terminal closes or the extension reloads.
