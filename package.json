@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -37,7 +37,10 @@
   "engines": {
     "vscode": "^1.93.0"
   },
-  "categories": ["AI", "Other"],
+  "categories": [
+    "AI",
+    "Other"
+  ],
   "galleryBanner": {
     "color": "#1e1e2e",
     "theme": "dark"
@@ -154,14 +157,22 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["confirmation", "completion"]
+            "enum": [
+              "confirmation",
+              "completion"
+            ]
           },
-          "default": ["confirmation", "completion"],
+          "default": [
+            "confirmation",
+            "completion"
+          ],
           "description": "When to fire alerts. 'confirmation' = agent waiting for y/n or approval (pattern match). 'completion' = command or agent turn finished (command-end + Claude Code Stop hook). Use 'Notification Bell: Configure Alert Triggers' from the Command Palette for an easier picker."
         },
         "agentConfirmSound.patterns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [
             "\\(y\\s*/\\s*n\\)",
             "\\[y\\s*/\\s*n\\]",
@@ -191,7 +202,9 @@
         },
         "agentConfirmSound.terminalNameFilter": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Optional. If non-empty, only terminals whose name contains one of these strings (case-insensitive) are watched. Leave empty to watch all terminals. Example: [\"claude\", \"aider\"]"
         },
@@ -260,13 +273,18 @@
         },
         "agentConfirmSound.sounds": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "List of absolute paths to sound files (.wav/.mp3/.aiff/.ogg/.flac). Leave empty to use the bundled sound. Add multiple files and set soundMode to 'random' to rotate through them. Use 'Notification Bell: Manage Sounds' from the Command Palette for an easier UI."
         },
         "agentConfirmSound.soundMode": {
           "type": "string",
-          "enum": ["fixed", "random"],
+          "enum": [
+            "fixed",
+            "random"
+          ],
           "enumDescriptions": [
             "Always use the first sound in the list.",
             "Pick a sound at random from the list each time."

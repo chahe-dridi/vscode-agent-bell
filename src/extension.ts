@@ -108,6 +108,9 @@ export function activate(ctx: vscode.ExtensionContext) {
         syncHookSound(ctx);
         refreshHookCommands();
       }
+      if (e.affectsConfiguration('agentConfirmSound.hookPreToolUse') && isHookInstalled()) {
+        refreshHookCommands();
+      }
     }),
 
     // ─── Terminal lifecycle ────────────────────────────────────────────────────
