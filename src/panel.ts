@@ -263,10 +263,15 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
 
   log(`[panel] refresh — watching:${watching} hook:${hookInstalled} reminder:${reminderMs}ms`);
 
-  // Volume pills
+  // Volume pills — call setVolPill so clicking also moves the slider
   const volPills = [0, 25, 50, 75, 100, 150, 200]
-    .map(v => pill(`${v}%`, volPct === v, 'setVolume', v / 100))
+    .map(v => {
+      const active = volPct === v;
+      const cls = `pill pill-sm${active ? ' active' : ''}`;
+      return `<button class="${cls}" onclick="setVolPill(${v / 100})">${active ? '✓ ' : ''}${v}%</button>`;
+    })
     .join('');
+  const volFill = Math.round(volPct / 2);
 
   // Min duration pills (inside task completed sub-row)
   const minDurMap: [number, string][] = [[0,'Off'],[1000,'1s'],[3000,'3s'],[5000,'5s'],[10000,'10s'],[30000,'30s']];
@@ -348,18 +353,37 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   .sound-chip { font-size: 0.82em; color: var(--vscode-descriptionForeground); background: var(--vscode-input-background,#3c3c3c); border-radius: 3px; padding: 1px 6px; white-space: nowrap; }
   .footer { margin-top: 18px; display: flex; gap: 12px; flex-wrap: wrap; }
   hr { border: none; border-top: 1px solid var(--vscode-widget-border, #2a2a2a); margin: 14px 0; }
+  .vol-row-inner { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+  .vol-track { display: flex; align-items: center; gap: 8px; }
+  .vol-slider {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 4px; border-radius: 2px; outline: none; cursor: pointer;
+  }
+  .vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--vscode-button-background, #0e639c);
+    cursor: pointer;
+    border: 2px solid var(--vscode-editor-background, #1e1e1e);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+    transition: transform 0.1s;
+  }
+  .vol-slider::-webkit-slider-thumb:hover { transform: scale(1.25); }
+  .vol-pct { font-size: 0.88em; font-weight: 600; min-width: 38px; text-align: right; color: var(--vscode-foreground); }
+  .vol-pills { display: flex; gap: 4px; flex-wrap: wrap; }
   .info {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 15px; height: 15px; border-radius: 50%;
-    background: var(--vscode-descriptionForeground, #666); color: var(--vscode-editor-background, #1e1e1e);
-    font-size: 0.65em; font-weight: 800; cursor: help; position: relative; flex-shrink: 0; user-select: none;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #fff);
+    font-size: 0.7em; font-weight: 700; cursor: help; position: relative; flex-shrink: 0; user-select: none;
   }
   .info::after {
-    content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
-    background: var(--vscode-editorHoverWidget-background, #252526); color: var(--vscode-editorHoverWidget-foreground, #cccccc);
-    border: 1px solid var(--vscode-editorHoverWidget-border, #454545); border-radius: 4px; padding: 6px 10px;
-    font-size: 0.85em; width: max-content; max-width: 220px; white-space: normal; line-height: 1.4;
-    pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 100;
+    content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 0;
+    background: var(--vscode-editor-background, #1e1e1e); color: var(--vscode-editor-foreground, #d4d4d4);
+    border: 1px solid var(--vscode-focusBorder, #007acc); border-radius: 6px; padding: 8px 12px;
+    font-size: 0.9em; width: max-content; max-width: 240px; white-space: normal; line-height: 1.5;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   }
   .info:hover::after { opacity: 1; }
 </style>
@@ -380,7 +404,15 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   <div class="row">
     <span class="row-label">Volume</span>
     <span class="info" data-tip="Scale the alert volume from 0% (silent) to 200%. Values above 100% digitally amplify the signal — may clip very loud source files.">!</span>
-    ${volPills}
+    <div class="vol-row-inner">
+      <div class="vol-track">
+        <input type="range" id="vol-slider" class="vol-slider" min="0" max="200" value="${volPct}"
+               style="background:linear-gradient(to right,var(--vscode-button-background,#0e639c) ${volFill}%,var(--vscode-input-background,#3c3c3c) ${volFill}%)"
+               oninput="onVolInput(this.value)" onchange="send('setVolume',this.value/100)">
+        <span class="vol-pct" id="vol-pct">${volPct}%</span>
+      </div>
+      <div class="vol-pills">${volPills}</div>
+    </div>
   </div>
   <div class="row">
     <span class="row-label">Sound</span>
@@ -433,6 +465,26 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
 <script>
   const vscode = acquireVsCodeApi();
   function send(command, value) { vscode.postMessage({ command, value }); }
+
+  function updateVolSlider(pct) {
+    const fill = Math.round(pct / 2);
+    const s = document.getElementById('vol-slider');
+    if (s) s.style.background =
+      'linear-gradient(to right,var(--vscode-button-background,#0e639c) ' + fill + '%,var(--vscode-input-background,#3c3c3c) ' + fill + '%)';
+  }
+  function onVolInput(val) {
+    const pct = parseInt(val, 10);
+    const el = document.getElementById('vol-pct');
+    if (el) el.textContent = pct + '%';
+    updateVolSlider(pct);
+  }
+  function setVolPill(val) {
+    const pct = Math.round(val * 100);
+    const s = document.getElementById('vol-slider');
+    if (s) s.value = pct;
+    onVolInput(pct);
+    send('setVolume', val);
+  }
 </script>
 </body>
 </html>`;

@@ -79,3 +79,4 @@ Global cooldown so rapid fires across multiple terminals don't stack. Separate f
 | 0.5.18 | Fix bash approval pattern (`allow this bash`); add "Every command" toggle — plays sound on every terminal command start |
 | 0.6.0  | Mute This Terminal / Unmute This Terminal commands — per-terminal alert suppression; muted terminals listed in status bar tooltip |
 | 0.6.1  | Settings panel exposes all settings — master toggle, per-event toggles, debounce pills, terminal filter display, reminder interval + max, OS notifications, focus terminal, debug log, hook setup/remove, PreToolUse toggle |
+| 0.6.2  | Settings panel polish — volume slider with real-time fill + pill sync; info tooltip redesigned with box shadow, editor colors, and primary-color badge |

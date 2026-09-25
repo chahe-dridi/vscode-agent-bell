@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.2] — 2026-09-25
+
+- Improve: **Volume slider** — smooth range slider added to the settings panel alongside the quick-select pills; dragging the slider updates the percentage in real-time, clicking a pill also moves the slider
+- Fix: **Info tooltip visibility** — tooltip now uses the editor foreground/background colors with a box shadow and focus-border outline, making it readable in all themes; info badge uses the primary button color so it's clearly visible against any panel background
+
 ## [0.6.1] — 2026-09-23
 
 - Improve: **Settings panel exposes all settings** — every `agentConfirmSound.*` config key is now controllable from the panel without opening full settings:
