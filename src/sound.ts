@@ -8,16 +8,75 @@ import { log } from './logger';
 
 let tempFileCounter = 0;
 
+export interface BuiltinSound {
+  readonly id: string;
+  readonly label: string;
+  readonly file: string;
+  readonly description: string;
+}
+
+export const BUILTIN_SOUNDS: readonly BuiltinSound[] = [
+  { id: 'notify', label: 'Notify',            file: 'notify.wav',            description: 'Soft default pulse' },
+  { id: 'bell',   label: 'Notification Bell', file: 'notification-bell.mp3', description: 'Classic bell tone' },
+  { id: 'chime',  label: 'Chime',             file: 'chime.wav',             description: 'Light chime' },
+  { id: 'ding',   label: 'Ding',              file: 'ding.wav',              description: 'Simple ding' },
+  { id: 'pop',    label: 'Pop',               file: 'pop.wav',               description: 'Quick pop' },
+  { id: 'glass',  label: 'Glass',             file: 'glass.wav',             description: 'Glass clink' },
+  { id: 'ping',   label: 'Ping',              file: 'ping.wav',              description: 'High-frequency ping' },
+  { id: 'alert',  label: 'Alert',             file: 'alert.wav',             description: 'Urgent alert' },
+];
+
+/** Returns the absolute path to the built-in sound file, or undefined if the file doesn't exist yet. */
+export function resolveBuiltinSound(ctx: vscode.ExtensionContext, id: string): string | undefined {
+  const entry = BUILTIN_SOUNDS.find((s) => s.id === id);
+  if (!entry) { return undefined; }
+  const p = path.join(ctx.extensionPath, 'media', entry.file);
+  return fs.existsSync(p) ? p : undefined;
+}
+
+/** Returns a human-readable label for the currently active sound (for the settings panel). */
+export function activeSoundLabel(ctx: vscode.ExtensionContext): string {
+  const cfg = getConfig();
+  const activeSoundId = cfg.get<string>('activeSoundId', 'notify');
+  if (activeSoundId && activeSoundId !== 'custom') {
+    const entry = BUILTIN_SOUNDS.find((s) => s.id === activeSoundId);
+    if (entry) { return entry.label; }
+  }
+  const sounds = cfg.get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
+  if (sounds.length > 0) { return path.basename(sounds[0]); }
+  return 'Notify';
+}
+
 export function pickSoundFile(ctx: vscode.ExtensionContext): string {
-  const bundled = path.join(ctx.extensionPath, 'media', 'notify.wav');
-  const sounds = getConfig().get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
-  if (sounds.length === 0) { return bundled; }
-  const mode = getConfig().get<string>('soundMode', 'fixed');
+  const cfg = getConfig();
+  const activeSoundId = cfg.get<string>('activeSoundId', 'notify');
+  const sounds = cfg.get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
+  const mode = cfg.get<string>('soundMode', 'fixed');
+  const fallback = path.join(ctx.extensionPath, 'media', 'notify.wav');
+
   if (mode === 'random') {
-    const pool = Array.from(new Set([bundled, ...sounds]));
+    const builtinPath = activeSoundId !== 'custom'
+      ? (resolveBuiltinSound(ctx, activeSoundId) ?? fallback)
+      : fallback;
+    const pool = Array.from(new Set([builtinPath, ...sounds]));
     return pool[Math.floor(Math.random() * pool.length)];
   }
-  return sounds[0];
+
+  // Use custom sound from sounds[] list
+  if (activeSoundId === 'custom') {
+    return sounds.length > 0 ? sounds[0] : fallback;
+  }
+
+  // Use built-in by ID
+  if (activeSoundId) {
+    const builtinPath = resolveBuiltinSound(ctx, activeSoundId);
+    if (builtinPath) { return builtinPath; }
+  }
+
+  // Backward-compat: if no activeSoundId set yet but sounds[] has a custom path, use it
+  if (sounds.length > 0) { return sounds[0]; }
+
+  return fallback;
 }
 
 // Scale 16-bit PCM WAV samples in-memory.

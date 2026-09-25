@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.3] — 2026-09-25
+
+- Add: **Built-in sound library** — the extension now ships a catalog of bundled sounds selectable by name (`notify`, `bell`, `chime`, `ding`, `pop`, `glass`, `ping`, `alert`). The Manage Sounds picker shows all built-ins in a dedicated section; unavailable slots show a "coming soon" hint until their file is dropped into `media/`. Custom file paths remain fully supported via `agentConfirmSound.sounds` with `activeSoundId: custom`.
+- Add: **`agentConfirmSound.activeSoundId` setting** — single string key that identifies the active sound by ID rather than an absolute path. Existing `sounds[]` custom paths still work unchanged.
+
 ## [0.6.2] — 2026-09-25
 
 - Improve: **Volume slider** — smooth range slider added to the settings panel alongside the quick-select pills; dragging the slider updates the percentage in real-time, clicking a pill also moves the slider

@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
-import * as path from 'node:path';
 import { getConfig, getAlertOn } from './config';
 import { log } from './logger';
 import { getWatching } from './statusBar';
-import { pickSoundFile, triggerSound } from './sound';
+import { activeSoundLabel, triggerSound } from './sound';
 import { isHookInstalled } from './hooks';
 
 export class SettingsViewProvider implements vscode.WebviewViewProvider {
@@ -259,7 +258,7 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   const termFilter        = cfg.get<string[]>('terminalNameFilter', []);
   const termFilterLabel   = termFilter.length > 0 ? termFilter.join(', ') : 'All terminals';
   const watching          = getWatching();
-  const soundName         = path.basename(pickSoundFile(ctx));
+  const soundName         = activeSoundLabel(ctx);
 
   log(`[panel] refresh — watching:${watching} hook:${hookInstalled} reminder:${reminderMs}ms`);
 
