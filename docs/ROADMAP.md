@@ -80,3 +80,4 @@ Global cooldown so rapid fires across multiple terminals don't stack. Separate f
 | 0.6.0  | Mute This Terminal / Unmute This Terminal commands — per-terminal alert suppression; muted terminals listed in status bar tooltip |
 | 0.6.1  | Settings panel exposes all settings — master toggle, per-event toggles, debounce pills, terminal filter display, reminder interval + max, OS notifications, focus terminal, debug log, hook setup/remove, PreToolUse toggle |
 | 0.6.2  | Settings panel polish — volume slider with real-time fill + pill sync; info tooltip redesigned with box shadow, editor colors, and primary-color badge |
+| 0.6.3  | Built-in sound library — catalog of named bundled sounds (notify, bell, chime, ding, pop, glass, ping, alert); `activeSoundId` config; Manage Sounds shows built-ins first with availability hints |

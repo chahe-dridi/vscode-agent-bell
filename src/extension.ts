@@ -7,7 +7,7 @@ import { initLogger, log } from './logger';
 import { initHistory, addAlert, alertHistory, clearHistory, relativeTime } from './history';
 import { initStatusBar, updateStatusBar, flashStatusBar, setWatching, getWatching, setMutedNames } from './statusBar';
 import { initReminder, clearReminder, hasActiveReminder, getReminderTerminal } from './reminder';
-import { playSound, pickSoundFile, triggerSound } from './sound';
+import { playSound, pickSoundFile, triggerSound, BUILTIN_SOUNDS, resolveBuiltinSound } from './sound';
 import { showOsNotification } from './notifications';
 import {
   isHookInstalled, installClaudeHook, removeClaudeHook,
@@ -353,63 +353,74 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (activate === 'Use this sound now') {
         const withNew = [added[0], ...updated.filter((s) => s !== added[0])];
         await getConfig().update('sounds', withNew, vscode.ConfigurationTarget.Global);
+        await getConfig().update('activeSoundId', 'custom', vscode.ConfigurationTarget.Global);
         await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
         if (isHookInstalled()) { syncHookSound(ctx, added[0]); }
         vscode.window.showInformationMessage(`Notification Bell: now using ${path.basename(added[0])}.`);
       }
     }),
     vscode.commands.registerCommand('agentConfirmSound.chooseSounds', async () => {
-      const defaultBundledPath = path.join(ctx.extensionPath, 'media', 'notify.wav');
-      const bellBundledPath    = path.join(ctx.extensionPath, 'media', 'notification-bell.mp3');
       while (true) {
-        const sounds   = getConfig().get<string[]>('sounds', []);
-        const mode     = getConfig().get<string>('soundMode', 'fixed');
-        const volume   = getConfig().get<number>('volume', 1);
-        const isRandom = mode === 'random';
+        const cfg           = getConfig();
+        const activeSoundId = cfg.get<string>('activeSoundId', 'notify');
+        const sounds        = cfg.get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
+        const mode          = cfg.get<string>('soundMode', 'fixed');
+        const volume        = cfg.get<number>('volume', 1);
+        const isRandom      = mode === 'random';
 
-        const isDefaultBundledActive = !isRandom && (sounds.length === 0 || sounds[0] === defaultBundledPath);
-        const isBellBundledActive    = !isRandom && sounds.length > 0 && sounds[0] === bellBundledPath;
-
+        // ── Built-in sounds section ──────────────────────────────────────────
         const items: vscode.QuickPickItem[] = [
-          {
-            label: isDefaultBundledActive ? '$(check) Bundled — notify.wav     (default)' : '$(file-media) Bundled — notify.wav     (default)',
-            description: defaultBundledPath,
-            detail: isDefaultBundledActive ? 'Active — click to preview' : 'Click to switch to this sound',
-          },
-          {
-            label: isBellBundledActive ? '$(check) Bundled — notification-bell.mp3' : '$(file-media) Bundled — notification-bell.mp3',
-            description: bellBundledPath,
-            detail: isBellBundledActive ? 'Active — click to preview' : 'Click to switch to this sound',
-          },
+          { label: 'Built-in sounds', kind: vscode.QuickPickItemKind.Separator },
         ];
-
-        const customSounds = sounds.filter((s) => s !== defaultBundledPath && s !== bellBundledPath);
-        for (const s of customSounds) {
-          const isActive = !isRandom && sounds[0] === s;
+        for (const entry of BUILTIN_SOUNDS) {
+          const available = resolveBuiltinSound(ctx, entry.id) !== undefined;
+          const isActive  = !isRandom && activeSoundId === entry.id;
           items.push({
-            label: isActive ? `$(check) ${path.basename(s)}` : `$(file-media) ${path.basename(s)}`,
-            description: s,
-            detail: isActive ? 'Active — click to preview or remove' : 'Click to make this the active sound',
+            label: isActive
+              ? `$(check) ${entry.label}`
+              : available ? `$(file-media) ${entry.label}` : `$(circle-slash) ${entry.label}`,
+            description: entry.description,
+            detail: isActive
+              ? 'Active — click to preview'
+              : available ? 'Click to use this sound' : 'Coming soon — drop the file into media/ to enable',
           });
         }
+
+        // ── Custom sounds section ────────────────────────────────────────────
+        if (sounds.length > 0) {
+          items.push({ label: 'Custom sounds', kind: vscode.QuickPickItemKind.Separator });
+          for (const s of sounds) {
+            const isActive = !isRandom && activeSoundId === 'custom' && sounds[0] === s;
+            items.push({
+              label: isActive ? `$(check) ${path.basename(s)}` : `$(file-media) ${path.basename(s)}`,
+              description: s,
+              detail: isActive ? 'Active — click to preview or remove' : 'Click to make this the active sound',
+            });
+          }
+        }
+
+        // ── Actions ──────────────────────────────────────────────────────────
         items.push(
           { label: '', kind: vscode.QuickPickItemKind.Separator },
-          { label: '$(add) Add sound file…', description: 'Browse for .wav / .mp3 / .aiff / .ogg / .flac' },
+          { label: '$(add) Add custom sound file…', description: 'Browse for .wav / .mp3 / .aiff / .ogg / .flac' },
           { label: '', kind: vscode.QuickPickItemKind.Separator },
           { label: `$(unmute) Volume: ${Math.round(volume * 100)}%`, description: 'Click to change' },
           {
             label: isRandom ? '$(check) Random mode: On' : '$(circle-slash) Random mode: Off',
-            description: isRandom ? 'Picks a random sound each time — click to use fixed' : 'Always plays the active sound — click to randomise',
+            description: isRandom
+              ? 'Picks a random sound each time — click to use fixed'
+              : 'Always plays the active sound — click to randomise',
           },
         );
 
         const pick = await vscode.window.showQuickPick(items, {
           title: 'Notification Bell — Sounds',
-          placeHolder: 'Click a sound to activate it, or choose an action',
+          placeHolder: 'Pick a sound or choose an action',
         });
         if (!pick) { return; }
 
-        if (pick.label.includes('Add sound file')) {
+        // ── Handle actions ───────────────────────────────────────────────────
+        if (pick.label.includes('Add custom sound file')) {
           await vscode.commands.executeCommand('agentConfirmSound.addSound');
           continue;
         }
@@ -440,14 +451,14 @@ export function activate(ctx: vscode.ExtensionContext) {
           } else {
             newVol = parseInt(volPick.label, 10) / 100;
           }
-          await getConfig().update('volume', newVol, vscode.ConfigurationTarget.Global);
+          await cfg.update('volume', newVol, vscode.ConfigurationTarget.Global);
           vscode.window.showInformationMessage(`Notification Bell: volume set to ${Math.round(newVol * 100)}%.`);
           continue;
         }
 
         if (pick.label.includes('Random mode')) {
           const newMode = isRandom ? 'fixed' : 'random';
-          await getConfig().update('soundMode', newMode, vscode.ConfigurationTarget.Global);
+          await cfg.update('soundMode', newMode, vscode.ConfigurationTarget.Global);
           vscode.window.showInformationMessage(
             newMode === 'random'
               ? 'Notification Bell: random mode on — will shuffle through all sounds.'
@@ -456,17 +467,33 @@ export function activate(ctx: vscode.ExtensionContext) {
           continue;
         }
 
-        const soundPath = pick.description!;
-        const isBundledDefault = soundPath === defaultBundledPath;
-        const isBundledBell    = soundPath === bellBundledPath;
-        const isBundled        = isBundledDefault || isBundledBell;
-        const isActive = !isRandom && (
-          (isBundledDefault && (sounds.length === 0 || sounds[0] === defaultBundledPath)) ||
-          (sounds.length > 0 && sounds[0] === soundPath)
+        // ── Handle built-in selection ────────────────────────────────────────
+        const matchedBuiltin = BUILTIN_SOUNDS.find(
+          (e) => pick.label.replace(/^\$\(\S+\) /, '') === e.label
         );
+        if (matchedBuiltin) {
+          const resolvedPath = resolveBuiltinSound(ctx, matchedBuiltin.id);
+          if (!resolvedPath) {
+            vscode.window.showInformationMessage(
+              `Notification Bell: "${matchedBuiltin.label}" isn't bundled yet — drop ${matchedBuiltin.file} into the media/ folder to enable it.`
+            );
+            continue;
+          }
+          if (!isRandom && activeSoundId === matchedBuiltin.id) {
+            playSound(resolvedPath);
+            continue;
+          }
+          await cfg.update('activeSoundId', matchedBuiltin.id, vscode.ConfigurationTarget.Global);
+          await cfg.update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
+          if (isHookInstalled()) { syncHookSound(ctx, resolvedPath); }
+          vscode.window.showInformationMessage(`Notification Bell: now using ${matchedBuiltin.label}.`);
+          continue;
+        }
 
+        // ── Handle custom sound selection ────────────────────────────────────
+        const soundPath = pick.description!;
+        const isActive  = !isRandom && activeSoundId === 'custom' && sounds[0] === soundPath;
         if (isActive) {
-          if (isBundled) { playSound(soundPath); continue; }
           const action = await vscode.window.showQuickPick(
             [
               { label: '$(play) Preview', description: path.basename(soundPath) },
@@ -479,23 +506,19 @@ export function activate(ctx: vscode.ExtensionContext) {
             playSound(soundPath);
           } else if (action.label.includes('Remove')) {
             const updated2 = sounds.filter((s) => s !== soundPath);
-            await getConfig().update('sounds', updated2, vscode.ConfigurationTarget.Global);
+            await cfg.update('sounds', updated2, vscode.ConfigurationTarget.Global);
+            if (updated2.length === 0) {
+              await cfg.update('activeSoundId', 'notify', vscode.ConfigurationTarget.Global);
+            }
             vscode.window.showInformationMessage(`Notification Bell: removed ${path.basename(soundPath)}.`);
           }
         } else {
-          if (isBundledDefault) {
-            const filtered = sounds.filter((s) => s !== defaultBundledPath && s !== bellBundledPath);
-            await getConfig().update('sounds', filtered, vscode.ConfigurationTarget.Global);
-            await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
-            if (isHookInstalled()) { syncHookSound(ctx, defaultBundledPath); }
-            vscode.window.showInformationMessage('Notification Bell: switched to bundled sound (notify.wav).');
-          } else {
-            const reordered = [soundPath, ...sounds.filter((s) => s !== soundPath)];
-            await getConfig().update('sounds', reordered, vscode.ConfigurationTarget.Global);
-            await getConfig().update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
-            if (isHookInstalled()) { syncHookSound(ctx, soundPath); }
-            vscode.window.showInformationMessage(`Notification Bell: now using ${path.basename(soundPath)}.`);
-          }
+          const reordered = [soundPath, ...sounds.filter((s) => s !== soundPath)];
+          await cfg.update('sounds', reordered, vscode.ConfigurationTarget.Global);
+          await cfg.update('activeSoundId', 'custom', vscode.ConfigurationTarget.Global);
+          await cfg.update('soundMode', 'fixed', vscode.ConfigurationTarget.Global);
+          if (isHookInstalled()) { syncHookSound(ctx, soundPath); }
+          vscode.window.showInformationMessage(`Notification Bell: now using ${path.basename(soundPath)}.`);
         }
         continue;
       }

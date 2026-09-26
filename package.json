@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -271,13 +271,30 @@
           "default": false,
           "description": "Log every terminal chunk to the output channel (after ANSI stripping). Use this to see exactly what text reaches Agent Bell and tune your patterns. Disable when done — it is verbose."
         },
+        "agentConfirmSound.activeSoundId": {
+          "type": "string",
+          "enum": ["notify", "bell", "chime", "ding", "pop", "glass", "ping", "alert", "custom"],
+          "enumDescriptions": [
+            "Soft default pulse (bundled)",
+            "Classic bell tone (bundled)",
+            "Light chime (bundled)",
+            "Simple ding (bundled)",
+            "Quick pop (bundled)",
+            "Glass clink (bundled)",
+            "High-frequency ping (bundled)",
+            "Urgent alert (bundled)",
+            "Use the first file from the 'sounds' list (your own file)"
+          ],
+          "default": "notify",
+          "description": "Which sound plays on alert. Pick a bundled sound or set to 'custom' to use your own file via agentConfirmSound.sounds."
+        },
         "agentConfirmSound.sounds": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [],
-          "description": "List of absolute paths to sound files (.wav/.mp3/.aiff/.ogg/.flac). Leave empty to use the bundled sound. Add multiple files and set soundMode to 'random' to rotate through them. Use 'Notification Bell: Manage Sounds' from the Command Palette for an easier UI."
+          "description": "Absolute paths to your own sound files (.wav/.mp3/.aiff/.ogg/.flac). Used when activeSoundId is 'custom', or in random mode alongside the active built-in. Use 'Notification Bell: Manage Sounds' from the Command Palette for an easier UI."
         },
         "agentConfirmSound.soundMode": {
           "type": "string",
