@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.5] — 2026-09-29
+
+- Fix: **Claude Code hook signals within 400 ms are no longer dropped** — debounce logic in `setupHookSignalWatcher()` now checks both the hook event content and file modification time rather than discarding all changes within a 400 ms window. Distinct events (such as `Notification` immediately followed by `Stop`) now both register alerts, while multiple `fs.watch` events for a single write are still deduplicated.
+
 ## [0.6.4] — 2026-09-29
 
 - Fix: **Custom sounds ignored after 0.6.3** — users who picked a sound before 0.6.3 now keep it. A one-time migration sets `activeSoundId` from the old `sounds[]` order and removes stale bundled paths that pointed at an old extension version folder.
