@@ -8,15 +8,18 @@ let _item: vscode.StatusBarItem;
 let _flashTimer: ReturnType<typeof setTimeout> | undefined;
 let _watching = false;
 let _mutedNames: string[] = [];
+let _quietHoursActive = false;
 
 export function setMutedNames(names: string[]) {
   _mutedNames = names;
 }
 
 function withMutedSuffix(tooltip: string): string {
-  return _mutedNames.length > 0
-    ? `${tooltip}\nMuted: ${_mutedNames.join(', ')}`
-    : tooltip;
+  const suffixes = [
+    ...(_quietHoursActive ? ['Quiet hours active — sounds muted'] : []),
+    ...(_mutedNames.length > 0 ? [`Muted: ${_mutedNames.join(', ')}`] : []),
+  ];
+  return suffixes.length > 0 ? `${tooltip}\n${suffixes.join('\n')}` : tooltip;
 }
 
 export function initStatusBar(item: vscode.StatusBarItem) {
@@ -24,6 +27,7 @@ export function initStatusBar(item: vscode.StatusBarItem) {
 }
 
 export function getWatching() { return _watching; }
+export function getQuietHoursActive() { return _quietHoursActive; }
 
 export function updateStatusBar() {
   if (_flashTimer) { return; }  // the flash timer calls back here when it ends
@@ -61,10 +65,10 @@ export function flashStatusBar(label: string) {
   }, 2000);
 }
 
-export function setMuteFlag(muted: boolean) {
+function syncMuteFlag() {
   try {
     if (!fs.existsSync(CLAUDE_DIR)) { return; }
-    if (muted) {
+    if (!_watching || _quietHoursActive) {
       fs.writeFileSync(MUTE_FLAG_PATH, '', 'utf8');
     } else if (fs.existsSync(MUTE_FLAG_PATH)) {
       fs.unlinkSync(MUTE_FLAG_PATH);
@@ -72,9 +76,22 @@ export function setMuteFlag(muted: boolean) {
   } catch { /* ignore */ }
 }
 
+export function syncHookMuteFlag() {
+  syncMuteFlag();
+}
+
+export function setQuietHoursActive(value: boolean) {
+  if (_quietHoursActive === value) { return false; }
+  _quietHoursActive = value;
+  syncMuteFlag();
+  updateStatusBar();
+  log(value ? '[info] quiet hours started — sounds muted.' : '[info] quiet hours ended — sounds restored.');
+  return true;
+}
+
 export function setWatching(value: boolean) {
   _watching = value;
   updateStatusBar();
-  setMuteFlag(!value);
+  syncMuteFlag();
   log(value ? '[info] watching started.' : '[info] watching paused.');
 }

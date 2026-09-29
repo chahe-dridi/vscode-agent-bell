@@ -2,7 +2,7 @@
   "name": "agent-confirm-sound",
   "displayName": "Notification Bell",
   "description": "Sound + OS notification the moment your AI agent needs attention — Claude Code, aider, Gemini CLI, Codex CLI, and any terminal agent. Alert history, reminder escalation, and Claude Code hook integration.",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "publisher": "chahe-dridi",
   "icon": "icon.png",
   "repository": {
@@ -255,6 +255,18 @@
           "default": 3,
           "minimum": 1,
           "description": "Maximum number of reminders to fire before stopping. Only applies when reminderIntervalMs > 0."
+        },
+        "agentConfirmSound.quietHoursStart": {
+          "type": "string",
+          "default": "",
+          "pattern": "^$|^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "description": "Local daily start time for quiet hours in 24-hour HH:mm format. Leave empty to disable quiet hours. Example: 22:00."
+        },
+        "agentConfirmSound.quietHoursEnd": {
+          "type": "string",
+          "default": "",
+          "pattern": "^$|^([01][0-9]|2[0-3]):[0-5][0-9]$",
+          "description": "Local daily end time for quiet hours in 24-hour HH:mm format. Leave empty to disable quiet hours. Example: 07:00."
         },
         "agentConfirmSound.muteWhenFocused": {
           "type": "boolean",
