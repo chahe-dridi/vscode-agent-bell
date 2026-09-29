@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { getConfig, getAlertOn } from './config';
 import { log } from './logger';
 import { getWatching } from './statusBar';
-import { activeSoundLabel, triggerSound } from './sound';
+import { activeSoundLabel, playSound, pickSoundFile } from './sound';
 import { isHookInstalled } from './hooks';
 
 export class SettingsViewProvider implements vscode.WebviewViewProvider {
@@ -98,7 +98,8 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
           this.refresh();
           break;
         case 'previewSound':
-          triggerSound(this.ctx);
+          // Not triggerSound: the panel is always focused here, so muteWhenFocused would silence the preview.
+          playSound(pickSoundFile(this.ctx));
           break;
         case 'manageSounds':
           vscode.commands.executeCommand('agentConfirmSound.chooseSounds');
@@ -121,6 +122,15 @@ export class SettingsViewProvider implements vscode.WebviewViewProvider {
   refresh() {
     if (this._view?.visible) { this._view.webview.html = buildPanelHtml(this.ctx); }
   }
+}
+
+// Escape any dynamic (config-derived) value before interpolating into webview HTML.
+// terminalNameFilter and custom sound paths are user/workspace-settable, so an
+// unescaped value could inject markup/handlers into the panel.
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string
+  ));
 }
 
 function pill(label: string, active: boolean, cmd: string, arg: unknown, small = false): string {
@@ -416,7 +426,7 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   <div class="row">
     <span class="row-label">Sound</span>
     <span class="info" data-tip="Active sound file. Add custom .wav/.mp3/.ogg/.flac files or pick from the bundled options.">!</span>
-    <span class="sound-chip">${soundName}</span>
+    <span class="sound-chip">${esc(soundName)}</span>
     <button class="link-btn" onclick="send('previewSound')">▷ Preview</button>
     <button class="link-btn" onclick="send('manageSounds')">› Change</button>
   </div>
@@ -434,7 +444,7 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   <div class="row">
     <span class="row-label">Terminal filter</span>
     <span class="info" data-tip="Only watch terminals whose name contains one of these strings (case-insensitive). Leave empty to watch all terminals. Edit in full settings.">!</span>
-    <span class="sound-chip">${termFilterLabel}</span>
+    <span class="sound-chip">${esc(termFilterLabel)}</span>
     <button class="link-btn" onclick="send('openSettings')">› Change</button>
   </div>
   <div class="row">

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.4] — 2026-09-29
+
+- Fix: **Custom sounds ignored after 0.6.3** — users who picked a sound before 0.6.3 now keep it. A one-time migration sets `activeSoundId` from the old `sounds[]` order and removes stale bundled paths that pointed at an old extension version folder.
+- Fix: **Claude Code hook played the wrong sound** — the hook now uses the sound picked in Manage Sounds / `activeSoundId`, and re-syncs when that setting changes.
+- Fix: **Settings panel Preview was silent** when "Auto-mute when focused" was on.
+- Fix: **"Every command" sound ignored muted terminals.**
+- Fix: **Reminders kept firing after pausing** from the settings panel or `enabled` setting.
+- Fix: **Status bar tooltip repeated the "Muted:" line** when several alerts arrived during a flash.
+- Security: **`~/.claude/settings.json` is never overwritten when it contains invalid JSON** — writes are atomic, and a one-time backup (`settings.json.agent-bell.bak`) is kept.
+- Security: **Hook signal file only accepts known event names**, so other local processes can't trigger arbitrary alerts.
+- Security: **Settings panel escapes terminal filter and sound names** before rendering.
+
 ## [0.6.3] — 2026-09-25
 
 - Add: **Built-in sound library** — the extension now ships a catalog of bundled sounds selectable by name (`notify`, `bell`, `chime`, `ding`, `pop`, `glass`, `ping`, `alert`). The Manage Sounds picker shows all built-ins in a dedicated section; unavailable slots show a "coming soon" hint until their file is dropped into `media/`. Custom file paths remain fully supported via `agentConfirmSound.sounds` with `activeSoundId: custom`.
