@@ -250,11 +250,16 @@ export async function removeClaudeHook(ctx: vscode.ExtensionContext): Promise<vo
 // ─── Signal watcher (IPC from Claude Code back into the extension) ────────────
 
 let _hookSignalWatcher: fs.FSWatcher | undefined;
-let _lastHookSignalTs  = 0;
+let _lastHookSignal: { event: string; mtimeMs: number } | undefined;
 
-function handleHookSignal() {
+function handleHookSignal(mtimeMs: number) {
   try {
     const event = fs.readFileSync(HOOK_SIGNAL_PATH, 'utf8').slice(0, 64).trim();
+    // fs.watch can report the same file write more than once. Deduplicate using
+    // the signal payload and its modification time so distinct hook events that
+    // happen close together are still handled.
+    if (_lastHookSignal?.event === event && _lastHookSignal.mtimeMs === mtimeMs) { return; }
+    _lastHookSignal = { event, mtimeMs };
     // Only act on events we wrote. Any other local process can write this file;
     // ignoring unknown content prevents spoofed/arbitrary alerts.
     const triggerType = HOOK_TRIGGER_TYPE[event];
@@ -280,10 +285,10 @@ export function setupHookSignalWatcher() {
   try {
     _hookSignalWatcher = fs.watch(CLAUDE_DIR, (_type, filename) => {
       if (!filename || filename !== path.basename(HOOK_SIGNAL_PATH)) { return; }
-      const now = Date.now();
-      if (now - _lastHookSignalTs < 400) { return; }
-      _lastHookSignalTs = now;
-      handleHookSignal();
+      try {
+        const { mtimeMs } = fs.statSync(HOOK_SIGNAL_PATH);
+        handleHookSignal(mtimeMs);
+      } catch { /* file may not exist yet or be mid-write */ }
     });
     _hookSignalWatcher.on('error', (e) => {
       log(`[hook] signal watcher error: ${e}`);
@@ -300,4 +305,5 @@ export function teardownHookSignalWatcher() {
     _hookSignalWatcher.close();
     _hookSignalWatcher = undefined;
   }
+  _lastHookSignal = undefined;
 }
