@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getConfig } from './config';
 import { log } from './logger';
-import { flashStatusBar } from './statusBar';
+import { flashStatusBar, getWatching } from './statusBar';
 import { triggerSound } from './sound';
 import { showOsNotification } from './notifications';
 
@@ -26,6 +26,7 @@ export function scheduleReminder(source: string, terminal?: vscode.Terminal) {
   _count           = 0;
 
   function fire() {
+    if (!getWatching()) { clearReminder(); return; }
     _count++;
     log(`[reminder] #${_count}/${maxCount} — ${_source}`);
     const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

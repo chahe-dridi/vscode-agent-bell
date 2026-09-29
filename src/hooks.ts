@@ -8,7 +8,7 @@ import {
   HOOK_SIGNAL_PATH, HOOK_MARKER,
 } from './config';
 import { log } from './logger';
-import { scaleWavBuffer } from './sound';
+import { scaleWavBuffer, activeSoundFile } from './sound';
 import { addAlert } from './history';
 import { flashStatusBar, getWatching } from './statusBar';
 import { showOsNotification } from './notifications';
@@ -39,23 +39,53 @@ const HOOK_TRIGGER_TYPE: Record<string, string> = {
 
 // ─── Settings I/O ─────────────────────────────────────────────────────────────
 
-export function readClaudeSettings(): Record<string, unknown> {
+// Lenient read for detection only (isHookInstalled). Returns {} if the file is
+// missing OR unparseable. NEVER use this as the base for a write — see below.
+function readClaudeSettingsSafe(): Record<string, unknown> {
   try {
     if (fs.existsSync(CLAUDE_SETTINGS_PATH)) {
       return JSON.parse(fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf8')) as Record<string, unknown>;
     }
-  } catch { /* corrupt or missing */ }
+  } catch { /* corrupt — treated as "unknown", never written back */ }
   return {};
 }
 
+// Strict read for every write path. Returns {} only when the file is genuinely
+// absent; throws if it exists but is not valid JSON. This is the guard that
+// prevents us from silently overwriting a real (but momentarily malformed)
+// settings.json with just our hooks and wiping the user's other settings.
+export function readClaudeSettings(): Record<string, unknown> {
+  if (!fs.existsSync(CLAUDE_SETTINGS_PATH)) { return {}; }
+  const raw = fs.readFileSync(CLAUDE_SETTINGS_PATH, 'utf8');
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch (e) {
+    throw new Error(
+      `~/.claude/settings.json is not valid JSON — refusing to modify it to avoid data loss. ` +
+      `Fix or remove the file, then retry. (${e})`
+    );
+  }
+}
+
 function writeClaudeSettings(settings: Record<string, unknown>) {
-  fs.writeFileSync(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  const data   = JSON.stringify(settings, null, 2) + '\n';
+  const backup = CLAUDE_SETTINGS_PATH + '.agent-bell.bak';
+  // One-time recovery snapshot from before we ever touched the file.
+  try {
+    if (fs.existsSync(CLAUDE_SETTINGS_PATH) && !fs.existsSync(backup)) {
+      fs.copyFileSync(CLAUDE_SETTINGS_PATH, backup);
+    }
+  } catch { /* backup is best-effort */ }
+  // Atomic write: a crash mid-write leaves the original intact.
+  const tmp = CLAUDE_SETTINGS_PATH + '.agent-bell.tmp';
+  fs.writeFileSync(tmp, data, 'utf8');
+  fs.renameSync(tmp, CLAUDE_SETTINGS_PATH);
 }
 
 // ─── Hook state ───────────────────────────────────────────────────────────────
 
 export function isHookInstalled(): boolean {
-  const settings = readClaudeSettings();
+  const settings = readClaudeSettingsSafe();
   const hooks = settings['hooks'] as Record<string, unknown> | undefined;
   if (!hooks) { return false; }
   return HOOK_CONFIGS.some(({ event }) => {
@@ -101,7 +131,7 @@ function buildHookCommand(soundFile: string, hookEvent: string): string {
 
 export function syncHookSound(ctx: vscode.ExtensionContext, sourcePath?: string) {
   try {
-    const src = sourcePath ?? pickSoundFileForHook(ctx);
+    const src = sourcePath ?? activeSoundFile(ctx);
     if (!fs.existsSync(src)) {
       log(`[hook] syncHookSound skipped — file not found: ${src}`);
       return;
@@ -124,13 +154,6 @@ export function syncHookSound(ctx: vscode.ExtensionContext, sourcePath?: string)
   } catch (e) {
     log(`[hook] syncHookSound failed: ${e}`);
   }
-}
-
-function pickSoundFileForHook(ctx: vscode.ExtensionContext): string {
-  const bundled = path.join(ctx.extensionPath, 'media', 'notify.wav');
-  const sounds  = getConfig().get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
-  if (sounds.length === 0) { return bundled; }
-  return sounds[0];
 }
 
 // ─── Hook commands refresh ────────────────────────────────────────────────────
@@ -231,10 +254,12 @@ let _lastHookSignalTs  = 0;
 
 function handleHookSignal() {
   try {
-    const event = fs.readFileSync(HOOK_SIGNAL_PATH, 'utf8').trim();
-    if (!event) { return; }
+    const event = fs.readFileSync(HOOK_SIGNAL_PATH, 'utf8').slice(0, 64).trim();
+    // Only act on events we wrote. Any other local process can write this file;
+    // ignoring unknown content prevents spoofed/arbitrary alerts.
     const triggerType = HOOK_TRIGGER_TYPE[event];
-    if (triggerType && !getAlertOn().includes(triggerType)) { return; }
+    if (!triggerType) { return; }
+    if (!getAlertOn().includes(triggerType)) { return; }
     const now = Date.now();
     const timeLabel = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     log(`[hook] signal: ${event} at ${timeLabel}`);

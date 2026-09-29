@@ -7,7 +7,7 @@ import { initLogger, log } from './logger';
 import { initHistory, addAlert, alertHistory, clearHistory, relativeTime } from './history';
 import { initStatusBar, updateStatusBar, flashStatusBar, setWatching, getWatching, setMutedNames } from './statusBar';
 import { initReminder, clearReminder, hasActiveReminder, getReminderTerminal } from './reminder';
-import { playSound, pickSoundFile, triggerSound, BUILTIN_SOUNDS, resolveBuiltinSound } from './sound';
+import { playSound, pickSoundFile, triggerSound, BUILTIN_SOUNDS, resolveBuiltinSound, migrateSoundSettings } from './sound';
 import { showOsNotification } from './notifications';
 import {
   isHookInstalled, installClaudeHook, removeClaudeHook,
@@ -42,11 +42,15 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   setWatching(getConfig().get<boolean>('enabled', true));
 
-  if (isHookInstalled()) {
-    syncHookSound(ctx);   // must run before refreshHookCommands to set _hookSoundPath
-    refreshHookCommands();
-    setupHookSignalWatcher();
-  }
+  migrateSoundSettings()
+    .catch((e) => log(`[warn] sound settings migration failed: ${e}`))
+    .finally(() => {
+      if (isHookInstalled()) {
+        syncHookSound(ctx);   // must run before refreshHookCommands to set _hookSoundPath
+        refreshHookCommands();
+        setupHookSignalWatcher();
+      }
+    });
 
   // Ask once if the user hasn't decided about Claude Code integration.
   const hookDecision = ctx.globalState.get<string>('hookDecision');
@@ -98,10 +102,12 @@ export function activate(ctx: vscode.ExtensionContext) {
       }
       if (e.affectsConfiguration('agentConfirmSound.enabled')) {
         setWatching(getConfig().get<boolean>('enabled', true));
+        if (!getWatching()) { clearReminder(); }
       }
       if (
         (e.affectsConfiguration('agentConfirmSound.volume') ||
          e.affectsConfiguration('agentConfirmSound.sounds') ||
+         e.affectsConfiguration('agentConfirmSound.activeSoundId') ||
          e.affectsConfiguration('agentConfirmSound.soundMode')) &&
         isHookInstalled()
       ) {
@@ -127,7 +133,10 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.window.onDidStartTerminalShellExecution((event) => {
       commandStartAt.set(event.terminal, Date.now());
       if (getReminderTerminal() === event.terminal) { clearReminder(); }
-      if (getWatching() && getConfig().get<boolean>('soundOnCommandStart', false) && terminalPassesNameFilter(event.terminal)) {
+      if (
+        getWatching() && !mutedTerminals.has(event.terminal) &&
+        getConfig().get<boolean>('soundOnCommandStart', false) && terminalPassesNameFilter(event.terminal)
+      ) {
         triggerSound(ctx);
       }
       if (getAlertOn().includes('confirmation') && getPatterns().length > 0 && terminalPassesNameFilter(event.terminal)) {
@@ -291,6 +300,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         'agentConfirmSound.muteWhenFocused', 'agentConfirmSound.focusMode',
         'agentConfirmSound.reminderIntervalMs', 'agentConfirmSound.reminderMaxCount',
         'agentConfirmSound.debugLog', 'agentConfirmSound.soundOnCommandStart',
+        'agentConfirmSound.activeSoundId',
       ];
       for (const key of keys) {
         await config.update(key, undefined, vscode.ConfigurationTarget.Global);
@@ -375,15 +385,10 @@ export function activate(ctx: vscode.ExtensionContext) {
         for (const entry of BUILTIN_SOUNDS) {
           const available = resolveBuiltinSound(ctx, entry.id) !== undefined;
           const isActive  = !isRandom && activeSoundId === entry.id;
-          items.push({
-            label: isActive
-              ? `$(check) ${entry.label}`
-              : available ? `$(file-media) ${entry.label}` : `$(circle-slash) ${entry.label}`,
-            description: entry.description,
-            detail: isActive
-              ? 'Active — click to preview'
-              : available ? 'Click to use this sound' : 'Coming soon — drop the file into media/ to enable',
-          });
+          let icon   = available ? '$(file-media)' : '$(circle-slash)';
+          let detail = available ? 'Click to use this sound' : 'Coming soon';
+          if (isActive) { icon = '$(check)'; detail = 'Active — click to preview'; }
+          items.push({ label: `${icon} ${entry.label}`, description: entry.description, detail });
         }
 
         // ── Custom sounds section ────────────────────────────────────────────
@@ -475,7 +480,7 @@ export function activate(ctx: vscode.ExtensionContext) {
           const resolvedPath = resolveBuiltinSound(ctx, matchedBuiltin.id);
           if (!resolvedPath) {
             vscode.window.showInformationMessage(
-              `Notification Bell: "${matchedBuiltin.label}" isn't bundled yet — drop ${matchedBuiltin.file} into the media/ folder to enable it.`
+              `Notification Bell: "${matchedBuiltin.label}" isn't available yet — it's coming in a future update.`
             );
             continue;
           }

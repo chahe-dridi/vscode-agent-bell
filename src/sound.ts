@@ -47,36 +47,54 @@ export function activeSoundLabel(ctx: vscode.ExtensionContext): string {
   return 'Notify';
 }
 
-export function pickSoundFile(ctx: vscode.ExtensionContext): string {
+/** The selected sound, ignoring random mode. Used for the Claude Code hook, which needs one stable file. */
+export function activeSoundFile(ctx: vscode.ExtensionContext): string {
   const cfg = getConfig();
   const activeSoundId = cfg.get<string>('activeSoundId', 'notify');
   const sounds = cfg.get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
-  const mode = cfg.get<string>('soundMode', 'fixed');
   const fallback = path.join(ctx.extensionPath, 'media', 'notify.wav');
-
-  if (mode === 'random') {
-    const builtinPath = activeSoundId !== 'custom'
-      ? (resolveBuiltinSound(ctx, activeSoundId) ?? fallback)
-      : fallback;
-    const pool = Array.from(new Set([builtinPath, ...sounds]));
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  // Use custom sound from sounds[] list
   if (activeSoundId === 'custom') {
     return sounds.length > 0 ? sounds[0] : fallback;
   }
+  return resolveBuiltinSound(ctx, activeSoundId) ?? fallback;
+}
 
-  // Use built-in by ID
-  if (activeSoundId) {
-    const builtinPath = resolveBuiltinSound(ctx, activeSoundId);
-    if (builtinPath) { return builtinPath; }
+export function pickSoundFile(ctx: vscode.ExtensionContext): string {
+  const cfg = getConfig();
+  if (cfg.get<string>('soundMode', 'fixed') !== 'random') { return activeSoundFile(ctx); }
+  const activeSoundId = cfg.get<string>('activeSoundId', 'notify');
+  const sounds = cfg.get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
+  const fallback = path.join(ctx.extensionPath, 'media', 'notify.wav');
+  const builtinPath = activeSoundId === 'custom'
+    ? fallback
+    : (resolveBuiltinSound(ctx, activeSoundId) ?? fallback);
+  const pool = Array.from(new Set([builtinPath, ...sounds]));
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// Before 0.6.3 the active sound was sounds[0], and picking a bundled sound stored its
+// versioned install path (…/agent-confirm-sound-0.6.2/media/x.mp3), which breaks on every update.
+export async function migrateSoundSettings(): Promise<void> {
+  const cfg = getConfig();
+  const inspected = cfg.inspect<string>('activeSoundId');
+  if (inspected?.globalValue !== undefined || inspected?.workspaceValue !== undefined) { return; }
+  const sounds = cfg.get<string[]>('sounds', []).filter((s) => s.trim().length > 0);
+  if (sounds.length === 0) { return; }
+
+  const isBundledPath = (p: string) =>
+    /agent-confirm-sound/i.test(p) && path.basename(path.dirname(p)) === 'media';
+  const custom = sounds.filter((s) => !isBundledPath(s));
+  const firstBundled = isBundledPath(sounds[0])
+    ? BUILTIN_SOUNDS.find((b) => b.file === path.basename(sounds[0]))
+    : undefined;
+
+  let nextId = custom.length > 0 ? 'custom' : 'notify';
+  if (firstBundled) { nextId = firstBundled.id; }
+  if (custom.length !== sounds.length) {
+    await cfg.update('sounds', custom, vscode.ConfigurationTarget.Global);
   }
-
-  // Backward-compat: if no activeSoundId set yet but sounds[] has a custom path, use it
-  if (sounds.length > 0) { return sounds[0]; }
-
-  return fallback;
+  await cfg.update('activeSoundId', nextId, vscode.ConfigurationTarget.Global);
+  log(`[info] migrated sound settings → activeSoundId: ${nextId}`);
 }
 
 // Scale 16-bit PCM WAV samples in-memory.

@@ -26,10 +26,7 @@ export function initStatusBar(item: vscode.StatusBarItem) {
 export function getWatching() { return _watching; }
 
 export function updateStatusBar() {
-  if (_flashTimer) {
-    _item.tooltip = withMutedSuffix(_item.tooltip as string);
-    return;
-  }
+  if (_flashTimer) { return; }  // the flash timer calls back here when it ends
   const count = getSessionAlertCount();
   const filter = getConfig().get<string[]>('terminalNameFilter', []);
   const filterLabel = filter.length > 0
