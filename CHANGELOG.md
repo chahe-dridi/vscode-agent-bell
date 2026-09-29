@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.5] — 2026-09-29
+
+- Add: **Quiet hours** — configure a local daily start/end time to mute alert sounds while preserving alert history and status bar updates. Supports windows crossing midnight and mutes Claude Code hook playback through the existing mute flag.
+
 ## [0.6.4] — 2026-09-29
 
 - Fix: **Custom sounds ignored after 0.6.3** — users who picked a sound before 0.6.3 now keep it. A one-time migration sets `activeSoundId` from the old `sounds[]` order and removes stale bundled paths that pointed at an old extension version folder.

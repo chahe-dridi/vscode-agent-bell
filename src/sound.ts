@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as fs from 'node:fs';
 import { getConfig } from './config';
 import { log } from './logger';
+import { getQuietHoursActive } from './statusBar';
 
 let tempFileCounter = 0;
 
@@ -120,6 +121,10 @@ export function scaleWavBuffer(buf: Buffer, factor: number): Buffer {
 }
 
 export function playSound(soundFile: string) {
+  if (getQuietHoursActive()) {
+    log('[info] sound suppressed — quiet hours are active');
+    return;
+  }
   const volume = Math.max(0, Math.min(2, getConfig().get<number>('volume', 1)));
   const platform = os.platform();
 
