@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getConfig, getAlertOn } from './config';
 import { log } from './logger';
-import { getWatching } from './statusBar';
+import { getWatching, getQuietHoursActive } from './statusBar';
 import { activeSoundLabel, playSound, pickSoundFile } from './sound';
 import { isHookInstalled } from './hooks';
 
@@ -264,6 +264,9 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   const soundOnCmdStart   = cfg.get<boolean>('soundOnCommandStart', false);
   const reminderMs        = cfg.get<number>('reminderIntervalMs', 0);
   const reminderMax       = cfg.get<number>('reminderMaxCount', 3);
+  const quietHoursStart   = cfg.get<string>('quietHoursStart', '').trim();
+  const quietHoursEnd     = cfg.get<string>('quietHoursEnd', '').trim();
+  const quietHoursActive  = getQuietHoursActive();
   const debounceMs        = cfg.get<number>('debounceMs', 4000);
   const termFilter        = cfg.get<string[]>('terminalNameFilter', []);
   const termFilterLabel   = termFilter.length > 0 ? termFilter.join(', ') : 'All terminals';
@@ -441,6 +444,12 @@ function buildPanelHtml(ctx: vscode.ExtensionContext): string {
   ${toggleRow('OS notifications', 'Show a Windows balloon tip / macOS notification banner / Linux notify-send when VS Code is not in focus.', 'setOsNotification', osNotification)}
   ${toggleRow('Focus terminal on alert', 'Bring the matching terminal into view when a confirmation pattern fires.', 'setFocusTerminal', focusTerminal)}
   ${toggleRow('Focus mode', 'Keep the sound but hide OS popup notifications. Useful when you can hear the bell but don\'t want notification spam.', 'setFocusMode', focusMode)}
+  <div class="row">
+    <span class="row-label">Quiet hours</span>
+    <span class="sound-chip">${quietHoursStart && quietHoursEnd ? `${esc(quietHoursStart)} – ${esc(quietHoursEnd)}` : 'Off'}</span>
+    <span class="val-label">${quietHoursActive ? 'Active — sounds muted' : 'Inactive'}</span>
+    <button class="link-btn" onclick="send('openSettings')">› Change</button>
+  </div>
   <div class="row">
     <span class="row-label">Terminal filter</span>
     <span class="info" data-tip="Only watch terminals whose name contains one of these strings (case-insensitive). Leave empty to watch all terminals. Edit in full settings.">!</span>

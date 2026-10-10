@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import { getConfig, getAlertOn, MUTE_FLAG_PATH, STABLE_SOUND_PATH } from './config';
 import { initLogger, log } from './logger';
 import { initHistory, addAlert, alertHistory, clearHistory, relativeTime } from './history';
-import { initStatusBar, updateStatusBar, flashStatusBar, setWatching, getWatching, setMutedNames } from './statusBar';
+import { initStatusBar, updateStatusBar, flashStatusBar, setWatching, getWatching, setMutedNames, setQuietHoursActive, syncHookMuteFlag } from './statusBar';
 import { initReminder, clearReminder, hasActiveReminder, getReminderTerminal } from './reminder';
 import { playSound, pickSoundFile, triggerSound, BUILTIN_SOUNDS, resolveBuiltinSound, migrateSoundSettings } from './sound';
 import { showOsNotification } from './notifications';
@@ -18,6 +18,7 @@ import {
   watchExecution, lastTriggerAt, commandStartAt, executionControllers, mutedTerminals,
 } from './terminal';
 import { SettingsViewProvider } from './panel';
+import { isQuietHoursActive } from './quietHours';
 
 // ─── Activation ───────────────────────────────────────────────────────────────
 
@@ -41,6 +42,20 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(gearItem);
 
   setWatching(getConfig().get<boolean>('enabled', true));
+
+  let refreshQuietHoursPanel = () => {};
+  const syncQuietHours = () => {
+    if (setQuietHoursActive(isQuietHoursActive())) { refreshQuietHoursPanel(); }
+  };
+  syncQuietHours();
+  let quietHoursTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleQuietHoursCheck = () => {
+    quietHoursTimer = setTimeout(() => {
+      syncQuietHours();
+      scheduleQuietHoursCheck();
+    }, 60_000 - (Date.now() % 60_000) + 10);
+  };
+  scheduleQuietHoursCheck();
 
   migrateSoundSettings()
     .catch((e) => log(`[warn] sound settings migration failed: ${e}`))
@@ -79,6 +94,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (choice === 'Set it up') {
         try {
           await installClaudeHook(ctx);
+          syncHookMuteFlag();
           vscode.window.showInformationMessage("Notification Bell: Claude Code integration ready. You'll hear a sound when Claude finishes or needs your input.");
         } catch (e) {
           vscode.window.showErrorMessage(`Notification Bell: failed to install hook — ${e}`);
@@ -93,6 +109,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     outputChannel,
     statusBarItem,
     { dispose: teardownHookSignalWatcher },
+    { dispose: () => { if (quietHoursTimer) { clearTimeout(quietHoursTimer); } } },
 
     // ─── Config change handlers ────────────────────────────────────────────────
     vscode.workspace.onDidChangeConfiguration((e) => {
@@ -103,6 +120,9 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (e.affectsConfiguration('agentConfirmSound.enabled')) {
         setWatching(getConfig().get<boolean>('enabled', true));
         if (!getWatching()) { clearReminder(); }
+      }
+      if (e.affectsConfiguration('agentConfirmSound.quietHoursStart') || e.affectsConfiguration('agentConfirmSound.quietHoursEnd')) {
+        syncQuietHours();
       }
       if (
         (e.affectsConfiguration('agentConfirmSound.volume') ||
@@ -246,6 +266,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       }
       try {
         await installClaudeHook(ctx);
+        syncHookMuteFlag();
         setupHookSignalWatcher();
         vscode.window.showInformationMessage('Notification Bell: Claude Code integration ready.');
       } catch (e) {
@@ -300,6 +321,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         'agentConfirmSound.muteWhenFocused', 'agentConfirmSound.focusMode',
         'agentConfirmSound.reminderIntervalMs', 'agentConfirmSound.reminderMaxCount',
         'agentConfirmSound.debugLog', 'agentConfirmSound.soundOnCommandStart',
+        'agentConfirmSound.quietHoursStart', 'agentConfirmSound.quietHoursEnd',
         'agentConfirmSound.activeSoundId',
       ];
       for (const key of keys) {
@@ -599,6 +621,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   );
 
   const settingsProvider = new SettingsViewProvider(ctx);
+  refreshQuietHoursPanel = () => settingsProvider.refresh();
   ctx.subscriptions.push(
     vscode.window.registerWebviewViewProvider(SettingsViewProvider.viewType, settingsProvider, {
       webviewOptions: { retainContextWhenHidden: true },

@@ -171,6 +171,7 @@ Other terminal agents (aider, Gemini CLI, scripts, etc.)
 | 🎛️ | **Settings panel** — gear icon in status bar opens a panel with volume pills, toggles, and event previews |
 | 🎯 | **Focus mode** — keeps the sound playing but silences OS popup notifications |
 | 🔇 | **Auto-mute when focused** — suppresses sound when VS Code is your active window |
+| 🌙 | **Quiet hours** — mute sounds on a daily schedule while keeping alert history and status updates |
 | ⚡ | **Alert triggers** — choose to alert on confirmations, task completions, or both |
 | ⏰ | **Reminder escalation** — re-alerts after N minutes if you haven't responded |
 | 🎵 | **Two bundled sounds** + support for custom files with random or fixed rotation |
@@ -193,6 +194,7 @@ The panel gives you quick access to the most common settings without opening `se
 | **Volume pills** | Click any percentage to change volume instantly (0% – 200%) |
 | **Auto-mute when focused** | Toggle — suppresses sound while VS Code is your active window |
 | **Focus mode** | Toggle — keeps the sound but hides OS popup notifications |
+| **Quiet hours** | Shows the configured daily window and whether it is currently active |
 | **Min task duration** | How long a command must run before "task done" fires |
 | **Events section** | Shows which sound plays for each event type with Preview / Change buttons |
 
@@ -254,6 +256,8 @@ Open Settings (`Ctrl+,`) and search **"Notification Bell"**, or add to `settings
 | `agentConfirmSound.osNotification` | `true` | Show an OS-level notification when VS Code is not focused. |
 | `agentConfirmSound.focusMode` | `false` | Keep the alert sound but suppress OS popup notifications (balloon / banner / notify-send). |
 | `agentConfirmSound.muteWhenFocused` | `false` | Suppress alert sounds while VS Code is your active window. History and status bar still update. |
+| `agentConfirmSound.quietHoursStart` | `""` | Local daily quiet-hours start in 24-hour `HH:mm` format. Empty disables quiet hours. |
+| `agentConfirmSound.quietHoursEnd` | `""` | Local daily quiet-hours end in 24-hour `HH:mm` format. Supports windows crossing midnight, such as `22:00` to `07:00`. |
 | `agentConfirmSound.reminderIntervalMs` | `0` | Re-alert after this many ms if you haven't responded. `0` = disabled. Example: `120000` for 2 minutes. |
 | `agentConfirmSound.reminderMaxCount` | `3` | Maximum number of reminders before stopping. |
 

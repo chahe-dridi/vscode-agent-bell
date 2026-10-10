@@ -1,8 +1,9 @@
 # Changelog
 
-## [0.6.5] — 2026-09-29
+## [0.7.0] — 2026-10-10
 
 - Fix: **Claude Code hook signals within 400 ms are no longer dropped** — debounce logic in `setupHookSignalWatcher()` now checks both the hook event content and file modification time rather than discarding all changes within a 400 ms window. Distinct events (such as `Notification` immediately followed by `Stop`) now both register alerts, while multiple `fs.watch` events for a single write are still deduplicated.
+- Add: **Quiet hours** — configure a local daily start/end time to mute alert sounds while preserving alert history and status bar updates. Supports windows crossing midnight and mutes Claude Code hook playback through the existing mute flag.
 
 ## [0.6.4] — 2026-09-29
 
