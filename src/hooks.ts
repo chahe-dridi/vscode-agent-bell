@@ -250,11 +250,18 @@ export async function removeClaudeHook(ctx: vscode.ExtensionContext): Promise<vo
 // ─── Signal watcher (IPC from Claude Code back into the extension) ────────────
 
 let _hookSignalWatcher: fs.FSWatcher | undefined;
-let _lastHookSignalTs  = 0;
+let _lastHookEvent     = '';
+let _lastHookMtime     = 0;
 
-function handleHookSignal() {
+export function handleHookSignal() {
   try {
+    const stat  = fs.statSync(HOOK_SIGNAL_PATH);
     const event = fs.readFileSync(HOOK_SIGNAL_PATH, 'utf8').slice(0, 64).trim();
+    if (!event) { return; }
+    if (event === _lastHookEvent && stat.mtimeMs === _lastHookMtime) { return; }
+    _lastHookEvent = event;
+    _lastHookMtime = stat.mtimeMs;
+
     // Only act on events we wrote. Any other local process can write this file;
     // ignoring unknown content prevents spoofed/arbitrary alerts.
     const triggerType = HOOK_TRIGGER_TYPE[event];
@@ -280,9 +287,6 @@ export function setupHookSignalWatcher() {
   try {
     _hookSignalWatcher = fs.watch(CLAUDE_DIR, (_type, filename) => {
       if (!filename || filename !== path.basename(HOOK_SIGNAL_PATH)) { return; }
-      const now = Date.now();
-      if (now - _lastHookSignalTs < 400) { return; }
-      _lastHookSignalTs = now;
       handleHookSignal();
     });
     _hookSignalWatcher.on('error', (e) => {
@@ -300,4 +304,7 @@ export function teardownHookSignalWatcher() {
     _hookSignalWatcher.close();
     _hookSignalWatcher = undefined;
   }
+  _lastHookEvent = '';
+  _lastHookMtime = 0;
 }
+
